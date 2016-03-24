@@ -25,7 +25,7 @@ import wordwrap = require("wordwrap");
 import * as cli from "../definitions/cli";
 import { AccessKey, Account, App, CollaboratorMap, CollaboratorProperties, Deployment, DeploymentMetrics, Headers, Package, PackageInfo, UpdateMetrics } from "code-push/script/types";
 
-var configFilePath: string = path.join(process.env.LOCALAPPDATA || process.env.HOME, ".code-push.config");
+var configFilePath: string;
 var emailValidator = require("email-validator");
 var packageJson = require("../package.json");
 var parseXml = Q.denodeify(require("xml2js").parseString);
@@ -391,9 +391,11 @@ function deserializeConnectionInfo(): ILoginConnectionInfo {
 }
 
 export function execute(command: cli.ICommand): Promise<void> {
-    connectionInfo = deserializeConnectionInfo();
-
     return Q(<void>null)
+        .then(() => {
+            configFilePath = getConfigFilePath();
+            connectionInfo = deserializeConnectionInfo();
+        })
         .then(() => {
             switch (command.type) {
                 case cli.CommandType.login:
@@ -703,7 +705,7 @@ function printDeploymentHistory(command: cli.IDeploymentHistoryCommand, deployme
                 if (releaseSource) {
                     releaseTime += "\n" + chalk.magenta(`(${releaseSource})`).toString();
                 }
-                
+
                 var row: string[] = [packageObject.label, releaseTime, packageObject.appVersion, packageObject.isMandatory ? "Yes" : "No"];
                 if (command.displayAuthor) {
                     var releasedBy: string = packageObject.releasedBy ? packageObject.releasedBy : "";
@@ -747,11 +749,11 @@ function getPackageString(packageObject: Package): string {
         chalk.green("Release Time: ") + formatDate(packageObject.uploadTime) + "\n" +
         chalk.green("Released By: ") + (packageObject.releasedBy ? packageObject.releasedBy : "") +
         (packageObject.description ? wordwrap(70)("\n" + chalk.green("Description: ") + packageObject.description) : "");
-        
+
     if (packageObject.isDisabled) {
         packageString += `\n${chalk.green("Disabled:")} Yes`;
     }
-    
+
     return packageString;
 }
 
@@ -1238,6 +1240,16 @@ function isBinaryOrZip(path: string): boolean {
     return path.search(/\.zip$/i) !== -1
         || path.search(/\.apk$/i) !== -1
         || path.search(/\.ipa$/i) !== -1;
+}
+
+function getConfigFilePath(): string {
+    var directoryPath: string = process.env.CODEPUSH_CONFIG_DIRECTORY || process.env.LOCALAPPDATA || process.env.HOME;
+
+    if (!directoryPath) {
+        throw new Error("A configuration file directory could not be found.  Please set the CODEPUSH_CONFIG_DIRECTORY environment variable to a directory path to store a CodePush CLI configuration file.  The directory must exist and be writable.");
+    }
+
+    return path.join(directoryPath, ".code-push.config");
 }
 
 function getYargsBooleanOrNull(value: any): boolean {
