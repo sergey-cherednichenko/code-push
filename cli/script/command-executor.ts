@@ -504,7 +504,7 @@ export function execute(command: cli.ICommand): Promise<void> {
 
                 case cli.CommandType.whoami:
                     return whoami(command);
-                    
+
                 default:
                     // We should never see this message as invalid commands should be caught by the argument parser.
                     throw new Error("Invalid command:  " + JSON.stringify(command));
@@ -872,7 +872,7 @@ function getReactNativeProjectAppVersion(platform: string, projectName: string):
         } catch (err) {
             throw new Error(`Unable to find or read "${appxManifestFileName}" in the "${path.join("windows", projectName)}" folder.`);
         }
-            
+
         return parseXml(appxManifestContents)
             .catch((err: any) => {
                 throw new Error(`Unable to parse the "${path.join(appxManifestContainingFolder, appxManifestFileName)}" file, it could be malformed.`);
@@ -1038,6 +1038,13 @@ export var release = (command: cli.IReleaseCommand): Promise<void> => {
                 .then((): void => {
                     log("Successfully released an update containing the \"" + command.package + "\" " + (isSingleFilePackage ? "file" : "directory") + " to the \"" + command.deploymentName + "\" deployment of the \"" + command.appName + "\" app.");
                 })
+                .catch((err: Error): void => {
+                    if (err.message === "Not Found") {
+                        err.message = "Release failed, the size of the upload may be too large.";
+                    }
+
+                    throw err;
+                })
                 .finally((): void => {
                     if (file.isTemporary) {
                         fs.unlinkSync(filePath);
@@ -1125,7 +1132,7 @@ export var releaseReact = (command: cli.IReleaseReactCommand): Promise<void> => 
                     ? "main.jsbundle"
                     : `index.${platform}.bundle`;
             }
-            
+
             break;
         default:
             throw new Error("Platform must be either \"android\", \"ios\" or \"windows\".");
