@@ -12,9 +12,9 @@ import Q = require("q");
  */
 export interface IPlatform {
     /**
-     * Gets the Cordova specific platform name. (e.g. "android" for the Android platform).
+     * Gets the platform name. (e.g. "android" for the Android platform).
      */
-    getCordovaName(): string;
+    getName(): string;
     
     /**
      * Gets the server url used for testing.
@@ -27,9 +27,7 @@ export interface IPlatform {
     getPlatformWwwPath(projectDirectory: string): string;
     
     /**
-     * Gets an optional IEmulatorManager for platforms for which "cordova run --nobuild" rebuilds the application for this platform anyway.
-     * IOS needs special handling here, since ios-sim touches the app every time and changes the app timestamp.
-     * This challenges the tests since we rely on the app timestamp in our logic for finding out if the application was updated through the app store.
+     * Gets an IEmulatorManager that is used to control the emulator during the tests.
      */
     getEmulatorManager(): IEmulatorManager;
     
@@ -99,7 +97,7 @@ export class Android implements IPlatform {
         return this.instance;
     }
 
-    public getCordovaName(): string {
+    public getName(): string {
         return "android";
     }
     
@@ -144,7 +142,7 @@ export class IOS implements IPlatform {
         return this.instance;
     }
 
-    public getCordovaName(): string {
+    public getName(): string {
         return "ios";
     }
     
@@ -450,7 +448,7 @@ export class PlatformResolver {
      */
     public static resolvePlatform(cordovaPlatformName: string): IPlatform {
         for (var i = 0; i < this.supportedPlatforms.length; i++) {
-            if (this.supportedPlatforms[i].getCordovaName() === cordovaPlatformName) {
+            if (this.supportedPlatforms[i].getName() === cordovaPlatformName) {
                 return this.supportedPlatforms[i];
             }
         }
