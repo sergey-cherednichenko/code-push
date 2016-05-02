@@ -7,13 +7,15 @@
 
 // IMPORTS //
 
+import assert = require("assert");
+var bodyparser = require("body-parser");
+var express = require("express");
+import path = require("path");
+import platform = require("./platform");
+import Q = require("q");
 import tm = require("./projectManager");
 import tu = require("./testUtil");
 import su = require("./serverUtil");
-import platform = require("./platform");
-import path = require("path");
-import assert = require("assert");
-import Q = require("q");
 
 export module PluginTestingFramework {
     //////////////////////////////////////////////////////////////////////////////////////////
@@ -56,14 +58,25 @@ export module PluginTestingFramework {
     // Use these classes to create and structure the tests
     
     interface TestBuilder {
+        /**
+         * Called to create the test suite by the initializeTests function
+         * 
+         * coreTestsOnly - Whether or not only core tests are to be run
+         * projectManager - The projectManager instance that these tests are being run with
+         * targetPlatform - The platform that these tests are going to be run on
+         */
         create(coreTestsOnly: boolean, projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform): void;
     }
     
     /** Use this class to create a mocha.describe that contains additional tests */
     class TestBuilderDescribe implements TestBuilder {
+        /** The name passed to the describe */
         private describeName: string;
+        /** The path to the scenario that will be loaded by the test app for the nested TestBuilder objects */
         private scenarioPath: string;
+        /** An array of nested TestBuilder objects that this describe contains */
         private testBuilders: TestBuilder[];
+        /** Whether or not this.testBuilders directly contains any TestBuildIt objects */
         private hasIts: boolean;
         
         /**
@@ -85,6 +98,13 @@ export module PluginTestingFramework {
             }
         }
         
+        /**
+         * Called to create the test suite by the initializeTests function
+         * 
+         * coreTestsOnly - Whether or not only core tests are to be run
+         * projectManager - The projectManager instance that these tests are being run with
+         * targetPlatform - The platform that these tests are going to be run on
+         */
         create(coreTestsOnly: boolean, projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform): void {
             describe(this.describeName, () => {
                 if (this.hasIts) {
@@ -116,8 +136,11 @@ export module PluginTestingFramework {
     
     /** Use this class to create a test through mocha.it */
     class TestBuilderIt implements TestBuilder {
+        /** The name of the test */
         private testName: string;
+        /** The test to be run */
         private test: (done: MochaDone) => void;
+        /** Whether or not the test should be run when "--core" is supplied */
         private isCoreTest: boolean;
         
         /**
@@ -131,6 +154,13 @@ export module PluginTestingFramework {
             this.isCoreTest = isCoreTest;
         }
         
+        /**
+         * Called to create the test suite by the initializeTests function
+         * 
+         * coreTestsOnly - Whether or not only core tests are to be run
+         * projectManager - The projectManager instance that these tests are being run with
+         * targetPlatform - The platform that these tests are going to be run on
+         */
         create(coreTestsOnly: boolean, projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform): void {
             if (!coreTestsOnly || this.isCoreTest) {
                 it(this.testName, this.test);
@@ -141,6 +171,9 @@ export module PluginTestingFramework {
     //////////////////////////////////////////////////////////////////////////////////////////
     // Use these functions in tests
     
+    /**
+     * Returns a default empty response to give to the app in a checkForUpdate request
+     */
     function createDefaultResponse(): su.CheckForUpdateResponseMock {
         var defaultResponse = new su.CheckForUpdateResponseMock();
 
@@ -157,6 +190,9 @@ export module PluginTestingFramework {
         return defaultResponse;
     }
 
+    /**
+     * Returns a default update response to give to the app in a checkForUpdate request
+     */
     function createMockResponse(mandatory: boolean = false): su.CheckForUpdateResponseMock {
         var updateResponse = new su.CheckForUpdateResponseMock();
         updateResponse.isAvailable = true;
@@ -171,6 +207,9 @@ export module PluginTestingFramework {
         return updateResponse;
     }
 
+    /**
+     * Waits for the next set of test messages sent by the app and asserts that they are equal to the expected messages
+     */
     function verifyMessages(expectedMessages: (string | su.AppMessage)[], deferred: Q.Deferred<void>): (requestBody: any) => void {
         var messageIndex = 0;
         return (requestBody: su.AppMessage) => {
@@ -193,13 +232,10 @@ export module PluginTestingFramework {
     };
     
     //////////////////////////////////////////////////////////////////////////////////////////
-    // Call this function with a ProjectManager and a set of TestBuilderDescribes to run tests
+    /**
+     * Call this function with a ProjectManager and an array of TestBuilderDescribe objects to run tests
+     */
     function initializeTests(projectManager: tm.ProjectManager, tests: TestBuilderDescribe[]) {
-        // GLOBALS //
-
-        var express = require("express");
-        var bodyparser = require("body-parser");
-
         // FUNCTIONS //
 
         function cleanupTest(): void {
@@ -210,6 +246,11 @@ export module PluginTestingFramework {
             testMessageResponse = undefined;
         }
 
+        /**
+         * Sets up tests for each platform.
+         * Creates the test project directory and the test update directory.
+         * Starts required emulators.
+         */
         function setupTests(): void {
             it("sets up tests correctly", (done) => {
                 var promises: Q.Promise<string>[] = [];
@@ -231,13 +272,22 @@ export module PluginTestingFramework {
             });
         }
 
+        /**
+         * Creates a test project directory at the given path.
+         */
         function createTestProject(directory: string): Q.Promise<string> {
             return projectManager.setupProject(directory, templatePath, TestAppName, TestNamespace);
         }
 
-        function runTests(targetPlatform: platform.IPlatform): void {
+        /**
+         * Creates and runs the tests from the projectManager and TestBuilderDescribe objects passed to initializeTests.
+         */
+        function createAndRunTests(targetPlatform: platform.IPlatform): void {
             var server: any;
             
+            /**
+             * Sets up the server that the test app uses to send test messages and check for and download updates.
+             */
             function setupServer() {
                 console.log("Setting up server at " + targetPlatform.getServerUrl());
                 
@@ -285,6 +335,9 @@ export module PluginTestingFramework {
                 server = app.listen(+targetPlatform.getServerUrl().match(serverPortRegEx)[1]);
             }
             
+            /**
+             * Closes the server.
+             */
             function cleanupServer(): void {
                 if (server) {
                     server.close();
@@ -292,10 +345,16 @@ export module PluginTestingFramework {
                 }
             }
 
+            /**
+             * Prepares for the next test
+             */
             function prepareTest(): Q.Promise<string> {
                 return projectManager.prepareEmulatorForTest(TestNamespace, targetPlatform);
             }
             
+            /**
+             * Returns a default update response with a download URL and random package hash.
+             */
             function getMockResponse(mandatory: boolean = false, randomHash: boolean = true): su.CheckForUpdateResponseMock {
                 var updateResponse = createMockResponse(mandatory);
                 updateResponse.downloadURL = targetPlatform.getServerUrl() + "/download";
@@ -337,7 +396,7 @@ export module PluginTestingFramework {
             else {
                 targetPlatforms.forEach(platform => {
                     var prefix: string = (onlyRunCoreTests ? "Core Tests " : "Tests ") + thisPluginPath + " on ";
-                    describe(prefix + platform.getName(), () => runTests(platform));
+                    describe(prefix + platform.getName(), () => createAndRunTests(platform));
                 });
             }
         });
