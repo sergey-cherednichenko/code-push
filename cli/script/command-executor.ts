@@ -74,6 +74,8 @@ export var spawn = childProcess.spawn;
 export var execSync = childProcess.execSync;
 
 var connectionInfo: ILoginConnectionInfo;
+
+// case sensitive strings
 const IOS_STRING = "ios";
 const INFO_PLIST_STRING = "info.plist";
 
