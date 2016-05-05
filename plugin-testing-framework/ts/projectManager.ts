@@ -28,6 +28,7 @@ export abstract class ProjectManager {
     public static INDEX_JS_PLACEHOLDER: string = "CODE_PUSH_INDEX_JS_PATH";
     public static CODE_PUSH_APP_VERSION_PLACEHOLDER: string = "CODE_PUSH_APP_VERSION";
     public static CODE_PUSH_APP_ID_PLACEHOLDER: string = "CODE_PUSH_TEST_APPLICATION_ID";
+    public static PLUGIN_VERSION_PLACEHOLDER: string = "CODE_PUSH_PLUGIN_VERSION";
 
     public static DEFAULT_APP_VERSION: string = "Store version";
     
@@ -67,7 +68,7 @@ export abstract class ProjectManager {
     /**
      * Runs the test app on the given target / platform.
      */
-    public abstract runPlatform(projectFolder: string, targetPlatform: platform.IPlatform, skipBuild?: boolean, target?: string): Q.Promise<string>;
+    public abstract runPlatform(projectFolder: string, targetPlatform: platform.IPlatform): Q.Promise<string>;
     
     // EMULATOR MANAGER FUNCTIONS
 

@@ -139,7 +139,7 @@ export module PluginTestingFramework {
         /** The name of the test */
         private testName: string;
         /** The test to be run */
-        private test: (done: MochaDone) => void;
+        private test: (projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform, done: MochaDone) => void;
         /** Whether or not the test should be run when "--core" is supplied */
         private isCoreTest: boolean;
         
@@ -148,7 +148,7 @@ export module PluginTestingFramework {
          * test - the test to provide to it
          * isCoreTest - whether or not the test should run when "--core" is supplied
          */
-        constructor(testName: string, test: (done: MochaDone) => void, isCoreTest: boolean) {
+        constructor(testName: string, test: (projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform, done: MochaDone) => void, isCoreTest: boolean) {
             this.testName = testName;
             this.test = test;
             this.isCoreTest = isCoreTest;
@@ -163,7 +163,7 @@ export module PluginTestingFramework {
          */
         create(coreTestsOnly: boolean, projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform): void {
             if (!coreTestsOnly || this.isCoreTest) {
-                it(this.testName, this.test);
+                it(this.testName, this.test.bind(undefined, projectManager, targetPlatform));
             }
         }
     }
@@ -206,6 +206,35 @@ export module PluginTestingFramework {
 
         return updateResponse;
     }
+            
+    /**
+     * Returns a default update response with a download URL and random package hash.
+     */
+    function getMockResponse(targetPlatform: platform.IPlatform, mandatory: boolean = false, randomHash: boolean = true): su.CheckForUpdateResponseMock {
+        var updateResponse = createMockResponse(mandatory);
+        updateResponse.downloadURL = targetPlatform.getServerUrl() + "/download";
+        // we need unique hashes to avoid conflicts - the application is not uninstalled between tests
+        // and we store the failed hashes in preferences
+        if (randomHash) {
+            updateResponse.packageHash = "randomHash-" + Math.floor(Math.random() * 10000);
+        }
+        return updateResponse;
+    };
+    
+    /**
+     * Wrapper for ProjectManager.setupScenario
+     */
+    function setupScenario(projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform, scenarioJsPath: string, version?: string): Q.Promise<string> {
+        return projectManager.setupScenario(testRunDirectory, TestNamespace, templatePath, scenarioJsPath, targetPlatform, version);
+    }
+    
+    /**
+     * Creates an update and zip for the test app using the specified scenario and version
+     */
+    function createUpdate(projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform, scenarioJsPath: string, version: string): Q.Promise<string> {
+        return projectManager.setupScenario(updatesDirectory, TestNamespace, templatePath, scenarioJsPath, targetPlatform, version)
+            .then<string>(projectManager.createUpdateArchive.bind(undefined, updatesDirectory, targetPlatform));
+    }
 
     /**
      * Waits for the next set of test messages sent by the app and asserts that they are equal to the expected messages
@@ -235,7 +264,7 @@ export module PluginTestingFramework {
     /**
      * Call this function with a ProjectManager and an array of TestBuilderDescribe objects to run tests
      */
-    function initializeTests(projectManager: tm.ProjectManager, tests: TestBuilderDescribe[]) {
+    function initializeTests(projectManager: tm.ProjectManager, tests: TestBuilderDescribe[]): void {
         // FUNCTIONS //
 
         function cleanupTest(): void {
@@ -351,20 +380,6 @@ export module PluginTestingFramework {
             function prepareTest(): Q.Promise<string> {
                 return projectManager.prepareEmulatorForTest(TestNamespace, targetPlatform);
             }
-            
-            /**
-             * Returns a default update response with a download URL and random package hash.
-             */
-            function getMockResponse(mandatory: boolean = false, randomHash: boolean = true): su.CheckForUpdateResponseMock {
-                var updateResponse = createMockResponse(mandatory);
-                updateResponse.downloadURL = targetPlatform.getServerUrl() + "/download";
-                // we need unique hashes to avoid conflicts - the application is not uninstalled between tests
-                // and we store the failed hashes in preferences
-                if (randomHash) {
-                    updateResponse.packageHash = "randomHash-" + Math.floor(Math.random() * 10000);
-                }
-                return updateResponse;
-            };
             
             describe("CodePush", function() {
                 before(() => {
