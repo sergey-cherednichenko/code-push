@@ -74,6 +74,8 @@ export var spawn = childProcess.spawn;
 export var execSync = childProcess.execSync;
 
 var connectionInfo: ILoginConnectionInfo;
+const IOS_STRING = "ios";
+const INFO_PLIST_STRING = "info.plist";
 
 export var confirm = (): Promise<boolean> => {
     return Promise<boolean>((resolve, reject, notify): void => {
@@ -823,14 +825,14 @@ function getReactNativeProjectAppVersion(platform: string, projectName: string):
     var missingPatchVersionRegex: RegExp = /^\d+\.\d+$/;
     if (platform === "ios") {
         try {
-            var infoPlistContainingFolder: string = path.join("iOS", projectName);
-            var infoPlistContents: string = fs.readFileSync(path.join(infoPlistContainingFolder, "Info.plist")).toString();
+            var infoPlistContainingFolder: string = path.join(IOS_STRING, projectName);
+            var infoPlistContents: string = fs.readFileSync(path.join(infoPlistContainingFolder, INFO_PLIST_STRING)).toString();
         } catch (err) {
             try {
-                infoPlistContainingFolder = "iOS";
-                infoPlistContents = fs.readFileSync(path.join(infoPlistContainingFolder, "Info.plist")).toString();
+                infoPlistContainingFolder = IOS_STRING;
+                infoPlistContents = fs.readFileSync(path.join(infoPlistContainingFolder, INFO_PLIST_STRING)).toString();
             } catch (err) {
-                throw new Error(`Unable to find or read "Info.plist" in the "iOS/${projectName}" or "iOS" folders.`);
+                throw new Error(`Unable to find or read "${INFO_PLIST_STRING}}" in the "${IOS_STRING}/${projectName}" or "${IOS_STRING}" folders.`);
             }
         }
 
