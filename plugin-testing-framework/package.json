@@ -2,7 +2,7 @@
   "name": "code-push-plugin-testing-framework",
   "version": "1.9.0-beta",
   "description": "Plugin Testing Framework for CodePush Plugins",
-  "main": "script/test.js",
+  "main": "script/index.js",
   "scripts": {
     "test": "gulp"
   },
@@ -17,6 +17,7 @@
     "base-64": "^0.1.0",
     "node-uuid": "^1.4.3",
     "q": "^1.4.1",
+    "replace": "latest",
     "superagent": "^1.7.2",
     "superagent-proxy": "^1.0.0"
   }

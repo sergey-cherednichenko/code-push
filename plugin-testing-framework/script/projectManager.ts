@@ -1,27 +1,20 @@
-/// <reference path="../typings/codePush.d.ts" />
-/// <reference path="../typings/q.d.ts" />
-/// <reference path="../typings/node.d.ts" />
-/// <reference path="../typings/replace.d.ts" />
-/// <reference path="../typings/mkdirp.d.ts" />
-
 "use strict";
 
 import child_process = require("child_process");
-import replace = require("replace");
 import path = require("path");
 import Q = require("q");
 import fs = require("fs");
-import mkdirp = require("mkdirp");
 
 import platform = require("./platform");
 
 var del = require("del");
 var archiver = require("archiver");
+var replace = require("replace");
 
 /**
  * In charge of project related operations.
  */
-export abstract class ProjectManager {
+export class ProjectManager {
     public static ANDROID_KEY_PLACEHOLDER: string = "CODE_PUSH_ANDROID_DEPLOYMENT_KEY";
     public static IOS_KEY_PLACEHOLDER: string = "CODE_PUSH_IOS_DEPLOYMENT_KEY";
     public static SERVER_URL_PLACEHOLDER: string = "CODE_PUSH_SERVER_URL";
@@ -32,43 +25,60 @@ export abstract class ProjectManager {
 
     public static DEFAULT_APP_VERSION: string = "Store version";
     
+    private static NOT_IMPLEMENTED_ERROR_MSG: string = "This method is unimplemented! Please extend ProjectManager and overwrite it!";
+    
     // ABSTRACT
+    // (not actually abstract because there are some issues with our dts generator that incorrectly generates abstract classes)
     
     /**
-     * Returns the name of the plugin being tested, ie Cordova or React-Native
+     * Returns the name of the plugin being tested, ie Cordova or React-Native.
+     * 
+     * Overwrite this in your implementation!
      */
-    public abstract getPluginName(): string;
+    public getPluginName(): string { throw ProjectManager.NOT_IMPLEMENTED_ERROR_MSG; }
 
 	/**
 	 * Creates a new test application at the specified path, and configures it
 	 * with the given server URL, android and ios deployment keys.
+     * 
+     * Overwrite this in your implementation!
 	 */
-    public abstract setupProject(projectDirectory: string, templatePath: string, appName: string, appNamespace: string, version?: string): Q.Promise<string>;
+    public setupProject(projectDirectory: string, templatePath: string, appName: string, appNamespace: string, version?: string): Q.Promise<string> { throw ProjectManager.NOT_IMPLEMENTED_ERROR_MSG; }
     
     /**
      * Sets up the scenario for a test in an already existing project.
+     * 
+     * Overwrite this in your implementation!
      */
-    public abstract setupScenario(projectDirectory: string, appId: string, templatePath: string, jsPath: string, targetPlatform: platform.IPlatform, version?: string): Q.Promise<string>;
+    public setupScenario(projectDirectory: string, appId: string, templatePath: string, jsPath: string, targetPlatform: platform.IPlatform, version?: string): Q.Promise<string> { throw ProjectManager.NOT_IMPLEMENTED_ERROR_MSG; }
 
     /**
      * Creates a CodePush update package zip for a project.
+     * 
+     * Overwrite this in your implementation!
      */
-    public abstract createUpdateArchive(projectDirectory: string, targetPlatform: platform.IPlatform, isDiff?: boolean): Q.Promise<string>;
+    public createUpdateArchive(projectDirectory: string, targetPlatform: platform.IPlatform, isDiff?: boolean): Q.Promise<string> { throw ProjectManager.NOT_IMPLEMENTED_ERROR_MSG; }
     
     /**
      * Prepares a specific platform for tests.
+     * 
+     * Overwrite this in your implementation!
      */
-    public abstract preparePlatform(projectFolder: string, targetPlatform: platform.IPlatform): Q.Promise<string>;
+    public preparePlatform(projectFolder: string, targetPlatform: platform.IPlatform): Q.Promise<string> { throw ProjectManager.NOT_IMPLEMENTED_ERROR_MSG; }
     
     /**
      * Cleans up a specific platform after tests.
+     * 
+     * Overwrite this in your implementation!
      */
-    public abstract cleanupAfterPlatform(projectFolder: string, targetPlatform: platform.IPlatform): Q.Promise<string>;
+    public cleanupAfterPlatform(projectFolder: string, targetPlatform: platform.IPlatform): Q.Promise<string> { throw ProjectManager.NOT_IMPLEMENTED_ERROR_MSG; }
 
     /**
      * Runs the test app on the given target / platform.
+     * 
+     * Overwrite this in your implementation!
      */
-    public abstract runPlatform(projectFolder: string, targetPlatform: platform.IPlatform): Q.Promise<string>;
+    public runPlatform(projectFolder: string, targetPlatform: platform.IPlatform): Q.Promise<string> { throw ProjectManager.NOT_IMPLEMENTED_ERROR_MSG; }
     
     // EMULATOR MANAGER FUNCTIONS
 
@@ -125,7 +135,16 @@ export abstract class ProjectManager {
     /**
      * Executes a child process and logs its output to the console and returns its output in the promise as a string
      */
-    public static execChildProcess(command: string, options?: child_process.IExecOptions, logOutput: boolean = true): Q.Promise<string> {
+    public static execChildProcess(command: string, options?: {
+            cwd?: string;
+            stdio?: any;
+            customFds?: any;
+            env?: any;
+            encoding?: string;
+            timeout?: number;
+            maxBuffer?: number;
+            killSignal?: string;
+        }, logOutput: boolean = true): Q.Promise<string> {
         var deferred = Q.defer<string>();
 
         options = options || {};

@@ -1,6 +1,3 @@
-/// <reference path="../typings/mocha.d.ts" />
-/// <reference path="../typings/node.d.ts" />
-
 "use strict";
 
 import child_process = require("child_process");
@@ -31,8 +28,8 @@ export class TestUtil {
     public static SHOULD_USE_WKWEBVIEW: string = "--use-wkwebview";
     
     // Both
-    public static templatePath = path.join(__dirname, "../../test/template");
-    public static thisPluginPath = path.join(__dirname, "../..");
+    public static templatePath = path.join(__dirname, "../../../test/template");
+    public static thisPluginPath = path.join(__dirname, "../../..");
     
     public static TEST_RUN_DIRECTORY: string = "--test-directory";
     private static defaultTestRunDirectory = path.join(os.tmpdir(), "cordova-plugin-code-push", "test-run");
@@ -229,7 +226,16 @@ export class TestUtil {
     /**
      * Executes a child process returns its output as a string.
      */
-    public static getProcessOutput(command: string, options?: child_process.IExecOptions, logOutput: boolean = false): Q.Promise<string> {
+    public static getProcessOutput(command: string, options?: {
+            cwd?: string;
+            stdio?: any;
+            customFds?: any;
+            env?: any;
+            encoding?: string;
+            timeout?: number;
+            maxBuffer?: number;
+            killSignal?: string;
+        }, logOutput: boolean = false): Q.Promise<string> {
         var deferred = Q.defer<string>();
         var result = "";
 
