@@ -72,16 +72,21 @@ export class TestBuilderDescribe implements TestBuilder {
     private testBuilders: TestBuilder[];
     /** Whether or not this.testBuilders directly contains any TestBuildIt objects */
     private hasIts: boolean;
+    /** The function that create calls (used for describe.only) */
+    private functionToUse: (description: string, spec: () => void) => Mocha.ISuite = describe;
     
     /**
      * describeName - used as the description in the call to describe
      * scenarioPath - if specified, will be set up before the tests run
      * testBuilders - the testBuilders to create within this describe call
+     * only - if true, use describe.only
      */
-    constructor(describeName: string, testBuilders: TestBuilder[], scenarioPath?: string) {
+    constructor(describeName: string, testBuilders: TestBuilder[], scenarioPath?: string, only?: boolean) {
         this.describeName = describeName;
         this.scenarioPath = scenarioPath;
         this.testBuilders = testBuilders;
+        
+        if (only) this.functionToUse = describe.only;
         
         this.hasIts = false;
         for (var i = 0; i < this.testBuilders.length; i++) {
@@ -100,7 +105,7 @@ export class TestBuilderDescribe implements TestBuilder {
      * targetPlatform - The platform that these tests are going to be run on
      */
     create(coreTestsOnly: boolean, projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform): void {
-        describe(this.describeName, () => {
+        this.functionToUse(this.describeName, () => {
             if (this.hasIts) {
                 afterEach(() => {
                     console.log("Cleaning up!");
@@ -136,16 +141,20 @@ export class TestBuilderIt implements TestBuilder {
     private test: (projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform, done: MochaDone) => void;
     /** Whether or not the test should be run when "--core" is supplied */
     private isCoreTest: boolean;
+    /** The function that create calls (used for it.only) */
+    private functionToUse: (expectation: string, assertion?: (done: MochaDone) => void) => Mocha.ITest = it;
     
     /**
      * testName - used as the expectation in the call to it
      * test - the test to provide to it
      * isCoreTest - whether or not the test should run when "--core" is supplied
+     * only - if true, use it.only
      */
-    constructor(testName: string, test: (projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform, done: MochaDone) => void, isCoreTest: boolean) {
+    constructor(testName: string, test: (projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform, done: MochaDone) => void, isCoreTest: boolean, only?: boolean) {
         this.testName = testName;
         this.test = test;
         this.isCoreTest = isCoreTest;
+        if (only) this.functionToUse = it.only;
     }
     
     /**
@@ -157,7 +166,7 @@ export class TestBuilderIt implements TestBuilder {
      */
     create(coreTestsOnly: boolean, projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform): void {
         if (!coreTestsOnly || this.isCoreTest) {
-            it(this.testName, this.test.bind(this, projectManager, targetPlatform));
+            this.functionToUse(this.testName, this.test.bind(this, projectManager, targetPlatform));
         }
     }
 }
@@ -254,6 +263,69 @@ export function verifyMessages(expectedMessages: (string | su.AppMessage)[], def
     };
 };
 
+/** The server to respond to requests from the app. */
+var server: any;
+
+/**
+ * Sets up the server that the test app uses to send test messages and check for and download updates.
+ */
+export function setupServer(targetPlatform: platform.IPlatform) {
+    console.log("Setting up server at " + targetPlatform.getServerUrl());
+    
+    var app = express();
+    app.use(bodyparser.json());
+    app.use(bodyparser.urlencoded({ extended: true }));
+    
+    app.use(function(req: any, res: any, next: any) {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "*");
+        res.setHeader("Access-Control-Allow-Headers", "origin, content-type, accept, X-CodePush-SDK-Version");
+        next();
+    });
+
+    app.get("/updateCheck", function(req: any, res: any) {
+        updateCheckCallback && updateCheckCallback(req);
+        res.send(updateResponse);
+        console.log("Update check called from the app.");
+        console.log("Request: " + JSON.stringify(req.query));
+        console.log("Response: " + JSON.stringify(updateResponse));
+    });
+
+    app.get("/download", function(req: any, res: any) {
+        console.log("Application downloading the package.");
+        
+        res.download(updatePackagePath);
+    });
+
+    app.post("/reportTestMessage", function(req: any, res: any) {
+        console.log("Application reported a test message.");
+        console.log("Body: " + JSON.stringify(req.body));
+
+        if (!testMessageResponse) {
+            console.log("Sending OK");
+            res.sendStatus(200);
+        } else {
+            console.log("Sending body: " + testMessageResponse);
+            res.status(200).send(testMessageResponse);
+        }
+
+        testMessageCallback && testMessageCallback(req.body);
+    });
+
+    var serverPortRegEx = /:([0-9]+)/;
+    server = app.listen(+targetPlatform.getServerUrl().match(serverPortRegEx)[1]);
+}
+
+/**
+ * Closes the server.
+ */
+export function cleanupServer(): void {
+    if (server) {
+        server.close();
+        server = undefined;
+    }
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////
 /**
  * Call this function with a ProjectManager and an array of TestBuilderDescribe objects to run tests
@@ -306,68 +378,6 @@ export function initializeTests(projectManager: tm.ProjectManager, tests: TestBu
      * Creates and runs the tests from the projectManager and TestBuilderDescribe objects passed to initializeTests.
      */
     function createAndRunTests(targetPlatform: platform.IPlatform): void {
-        var server: any;
-        
-        /**
-         * Sets up the server that the test app uses to send test messages and check for and download updates.
-         */
-        function setupServer() {
-            console.log("Setting up server at " + targetPlatform.getServerUrl());
-            
-            var app = express();
-            app.use(bodyparser.json());
-            app.use(bodyparser.urlencoded({ extended: true }));
-            
-            app.use(function(req: any, res: any, next: any) {
-                res.setHeader("Access-Control-Allow-Origin", "*");
-                res.setHeader("Access-Control-Allow-Methods", "*");
-                res.setHeader("Access-Control-Allow-Headers", "origin, content-type, accept");
-                next();
-            });
-
-            app.get("/updateCheck", function(req: any, res: any) {
-                updateCheckCallback && updateCheckCallback(req);
-                res.send(updateResponse);
-                console.log("Update check called from the app.");
-                console.log("Request: " + JSON.stringify(req.query));
-                console.log("Response: " + JSON.stringify(updateResponse));
-            });
-
-            app.get("/download", function(req: any, res: any) {
-                console.log("Application downloading the package.");
-                
-                res.download(updatePackagePath);
-            });
-
-            app.post("/reportTestMessage", function(req: any, res: any) {
-                console.log("Application reported a test message.");
-                console.log("Body: " + JSON.stringify(req.body));
-
-                if (!testMessageResponse) {
-                    console.log("Sending OK");
-                    res.sendStatus(200);
-                } else {
-                    console.log("Sending body: " + testMessageResponse);
-                    res.status(200).send(testMessageResponse);
-                }
-
-                testMessageCallback && testMessageCallback(req.body);
-            });
-
-            var serverPortRegEx = /:([0-9]+)/;
-            server = app.listen(+targetPlatform.getServerUrl().match(serverPortRegEx)[1]);
-        }
-        
-        /**
-         * Closes the server.
-         */
-        function cleanupServer(): void {
-            if (server) {
-                server.close();
-                server = undefined;
-            }
-        }
-
         /**
          * Prepares for the next test
          */
@@ -377,7 +387,7 @@ export function initializeTests(projectManager: tm.ProjectManager, tests: TestBu
         
         describe("CodePush", function() {
             before(() => {
-                setupServer();
+                setupServer(targetPlatform);
                 return projectManager.uninstallApplication(TestNamespace, targetPlatform)
                     .then(projectManager.preparePlatform.bind(projectManager, testRunDirectory, targetPlatform))
                     .then(projectManager.preparePlatform.bind(projectManager, updatesDirectory, targetPlatform));
