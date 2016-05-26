@@ -5,6 +5,7 @@
 import assert = require("assert");
 var bodyparser = require("body-parser");
 var express = require("express");
+import os = require("os");
 import path = require("path");
 import platform = require("./platform");
 import Q = require("q");
@@ -15,12 +16,44 @@ import su = require("./serverUtil");
 //////////////////////////////////////////////////////////////////////////////////////////
 // Use these variables in tests
 
-// CONST
+//// COMMAND LINE OPTION NAMES, FLAGS, AND DEFAULTS
+var testUtil = tu.TestUtil;
+
+const TEST_RUN_DIRECTORY_OPTION_NAME: string = "--test-directory";
+const DEFAULT_TEST_RUN_DIRECTORY = path.join(os.tmpdir(), testUtil.getPluginName(), "test-run");
+
+const TEST_UPDATES_DIRECTORY_OPTION_NAME: string = "--updates-directory";
+const DEFAULT_UPDATES_DIRECTORY = path.join(os.tmpdir(), testUtil.getPluginName(), "updates");
+
+const CORE_TESTS_ONLY_OPTION_NAME: string = "--core";
+
+const PULL_FROM_NPM_OPTION_NAME: string = "--npm";
+const NPM_PLUGIN_PATH: string = "cordova-plugin-code-push";
+const DEFAULT_PLUGIN_PATH: string = path.join(__dirname, "../../..");
+
+const SETUP_OPTION_NAME: string = "--setup";
+const RESTART_EMULATORS_OPTION_NAME: string = "--clean";
+
+//// CONST VARIABLES
+// Used to configure the tests.
+
 export const TestAppName = "TestCodePush";
 export const TestNamespace = "com.microsoft.codepush.test";
 export const AcquisitionSDKPluginName = "code-push";
 
-// NON CONST
+export const templatePath = path.join(__dirname, "../../../test/template");
+export const thisPluginPath = testUtil.readMochaCommandLineFlag(PULL_FROM_NPM_OPTION_NAME) ? NPM_PLUGIN_PATH : DEFAULT_PLUGIN_PATH;
+
+export const testRunDirectory = testUtil.readMochaCommandLineOption(TEST_RUN_DIRECTORY_OPTION_NAME, DEFAULT_TEST_RUN_DIRECTORY);
+export const updatesDirectory = testUtil.readMochaCommandLineOption(TEST_UPDATES_DIRECTORY_OPTION_NAME, DEFAULT_UPDATES_DIRECTORY);
+
+export const onlyRunCoreTests = testUtil.readMochaCommandLineFlag(CORE_TESTS_ONLY_OPTION_NAME);
+export const shouldSetup: boolean = testUtil.readMochaCommandLineFlag(SETUP_OPTION_NAME);
+export const restartEmulators: boolean = testUtil.readMochaCommandLineFlag(RESTART_EMULATORS_OPTION_NAME);
+
+//// SERVER VARIABLES
+// Control how the server responds to update checks, test messages, and downloads.
+
 /** Response the server gives the next update check request */
 export var updateResponse: any;
 
@@ -36,22 +69,20 @@ export var updateCheckCallback: (requestBody: any) => void;
 /** Location of the update package given in the update check response */
 export var updatePackagePath: string;
 
-// READ FROM THE COMMAND LINE
-export var testUtil = tu.TestUtil;
-export var templatePath = testUtil.templatePath;
-export var thisPluginPath = testUtil.readPluginPath();
-export var testRunDirectory = testUtil.readTestRunDirectory();
-export var updatesDirectory = testUtil.readTestUpdatesDirectory();
-export var onlyRunCoreTests = testUtil.readCoreTestsOnly();
-export var targetPlatforms: platform.IPlatform[] = platform.PlatformResolver.resolvePlatforms(testUtil.readTargetPlatforms());
-export var shouldUseWkWebView = testUtil.readShouldUseWkWebView();
-export var shouldSetup: boolean = testUtil.readShouldSetup();
-export var restartEmulators: boolean = testUtil.readRestartEmulators();
-
 //////////////////////////////////////////////////////////////////////////////////////////
 // Use these classes to create and structure the tests
 
-export interface TestBuilder {
+export class TestBuilder {
+    public only: boolean;
+    public skip: boolean;
+    
+    constructor(options: any) {
+        if (!options) return;
+        
+        if (!!options.only) this.only = options.only;
+        if (!!options.skip) this.skip = options.skip;
+    }
+    
     /**
      * Called to create the test suite by the initializeTests function
      * 
@@ -59,11 +90,11 @@ export interface TestBuilder {
      * projectManager - The projectManager instance that these tests are being run with
      * targetPlatform - The platform that these tests are going to be run on
      */
-    create(coreTestsOnly: boolean, projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform): void;
+    public create(coreTestsOnly: boolean, projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform): void {};
 }
 
 /** Use this class to create a mocha.describe that contains additional tests */
-export class TestBuilderDescribe implements TestBuilder {
+export class TestBuilderDescribe extends TestBuilder {
     /** The name passed to the describe */
     private describeName: string;
     /** The path to the scenario that will be loaded by the test app for the nested TestBuilder objects */
@@ -72,8 +103,8 @@ export class TestBuilderDescribe implements TestBuilder {
     private testBuilders: TestBuilder[];
     /** Whether or not this.testBuilders directly contains any TestBuildIt objects */
     private hasIts: boolean;
-    /** The function that create calls (used for describe.only) */
-    private functionToUse: (description: string, spec: () => void) => Mocha.ISuite = describe;
+    /** Whether or not this.testBuilders directly contains any TestBuilder objects that are only */
+    public hasOnly: boolean;
     
     /**
      * describeName - used as the description in the call to describe
@@ -81,18 +112,23 @@ export class TestBuilderDescribe implements TestBuilder {
      * testBuilders - the testBuilders to create within this describe call
      * only - if true, use describe.only
      */
-    constructor(describeName: string, testBuilders: TestBuilder[], scenarioPath?: string, only?: boolean) {
+    constructor(describeName: string, testBuilders: TestBuilder[], scenarioPath?: string, options?: any) {
+        super(options);
+        
         this.describeName = describeName;
         this.scenarioPath = scenarioPath;
         this.testBuilders = testBuilders;
         
-        if (only) this.functionToUse = describe.only;
-        
         this.hasIts = false;
+        this.hasOnly = false;
         for (var i = 0; i < this.testBuilders.length; i++) {
             if (this.testBuilders[i] instanceof TestBuilderIt) {
                 this.hasIts = true;
-                break;
+                if (this.hasIts && this.hasOnly) break;
+            }
+            if (this.testBuilders[i].only || (this.testBuilders[i] instanceof TestBuilderDescribe && (<TestBuilderDescribe>this.testBuilders[i]).hasOnly)) {
+                this.hasOnly = true;
+                if (this.hasIts && this.hasOnly) break;
             }
         }
     }
@@ -104,8 +140,10 @@ export class TestBuilderDescribe implements TestBuilder {
      * projectManager - The projectManager instance that these tests are being run with
      * targetPlatform - The platform that these tests are going to be run on
      */
-    create(coreTestsOnly: boolean, projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform): void {
-        this.functionToUse(this.describeName, () => {
+    public create(coreTestsOnly: boolean, projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform): void {
+        if (this.skip) return;
+        
+        describe(this.describeName, () => {
             if (this.hasIts) {
                 afterEach(() => {
                     console.log("Cleaning up!");
@@ -116,7 +154,7 @@ export class TestBuilderDescribe implements TestBuilder {
                 });
             
                 beforeEach(() => {
-                    return projectManager.prepareEmulatorForTest(TestNamespace, targetPlatform);
+                    return targetPlatform.getEmulatorManager().prepareEmulatorForTest(TestNamespace);
                 });
             }
 
@@ -127,22 +165,20 @@ export class TestBuilderDescribe implements TestBuilder {
             }
             
             this.testBuilders.forEach(testBuilder => {
-                testBuilder.create(coreTestsOnly, projectManager, targetPlatform);
+                if (!(this.hasOnly && !testBuilder.only)) testBuilder.create(coreTestsOnly, projectManager, targetPlatform);
             });
         });
     }
 }
 
 /** Use this class to create a test through mocha.it */
-export class TestBuilderIt implements TestBuilder {
+export class TestBuilderIt extends TestBuilder {
     /** The name of the test */
     private testName: string;
     /** The test to be run */
     private test: (projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform, done: MochaDone) => void;
     /** Whether or not the test should be run when "--core" is supplied */
     private isCoreTest: boolean;
-    /** The function that create calls (used for it.only) */
-    private functionToUse: (expectation: string, assertion?: (done: MochaDone) => void) => Mocha.ITest = it;
     
     /**
      * testName - used as the expectation in the call to it
@@ -150,11 +186,12 @@ export class TestBuilderIt implements TestBuilder {
      * isCoreTest - whether or not the test should run when "--core" is supplied
      * only - if true, use it.only
      */
-    constructor(testName: string, test: (projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform, done: MochaDone) => void, isCoreTest: boolean, only?: boolean) {
+    constructor(testName: string, test: (projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform, done: MochaDone) => void, isCoreTest: boolean, options?: any) {
+        super(options);
+        
         this.testName = testName;
         this.test = test;
         this.isCoreTest = isCoreTest;
-        if (only) this.functionToUse = it.only;
     }
     
     /**
@@ -164,9 +201,9 @@ export class TestBuilderIt implements TestBuilder {
      * projectManager - The projectManager instance that these tests are being run with
      * targetPlatform - The platform that these tests are going to be run on
      */
-    create(coreTestsOnly: boolean, projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform): void {
-        if (!coreTestsOnly || this.isCoreTest) {
-            this.functionToUse(this.testName, this.test.bind(this, projectManager, targetPlatform));
+    public create(coreTestsOnly: boolean, projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform): void {
+        if (!this.skip && (!coreTestsOnly || this.isCoreTest)) {
+            it(this.testName, this.test.bind(this, projectManager, targetPlatform));
         }
     }
 }
@@ -196,7 +233,7 @@ export function createDefaultResponse(): su.CheckForUpdateResponseMock {
 /**
  * Returns a default update response to give to the app in a checkForUpdate request
  */
-export function createMockResponse(mandatory: boolean = false): su.CheckForUpdateResponseMock {
+export function createUpdateResponse(mandatory: boolean = false, targetPlatform?: platform.IPlatform, randomHash: boolean = true): su.CheckForUpdateResponseMock {
     var updateResponse = new su.CheckForUpdateResponseMock();
     updateResponse.isAvailable = true;
     updateResponse.appVersion = "1.0.0";
@@ -207,22 +244,15 @@ export function createMockResponse(mandatory: boolean = false): su.CheckForUpdat
     updateResponse.packageSize = 12345;
     updateResponse.updateAppVersion = false;
 
-    return updateResponse;
-}
-        
-/**
- * Returns a default update response with a download URL and random package hash.
- */
-export function getMockResponse(targetPlatform: platform.IPlatform, mandatory: boolean = false, randomHash: boolean = true): su.CheckForUpdateResponseMock {
-    var updateResponse = createMockResponse(mandatory);
-    updateResponse.downloadURL = targetPlatform.getServerUrl() + "/download";
-    // we need unique hashes to avoid conflicts - the application is not uninstalled between tests
-    // and we store the failed hashes in preferences
+    if (!!targetPlatform) updateResponse.downloadURL = targetPlatform.getServerUrl() + "/download";
+    
+    // We need unique hashes to avoid conflicts.
     if (randomHash) {
         updateResponse.packageHash = "randomHash-" + Math.floor(Math.random() * 10000);
     }
+    
     return updateResponse;
-};
+}
 
 /**
  * Wrapper for ProjectManager.setupScenario
@@ -240,18 +270,20 @@ export function createUpdate(projectManager: tm.ProjectManager, targetPlatform: 
 }
 
 /**
- * Waits for the next set of test messages sent by the app and asserts that they are equal to the expected messages
+ * Returns a promise that waits for the next set of test messages sent by the app and resolves if that they are equal to the expected messages or rejects if they are not.
  */
-export function verifyMessages(expectedMessages: (string | su.AppMessage)[], deferred: Q.Deferred<void>): (requestBody: any) => void {
+export function expectTestMessages(expectedMessages: (string | su.AppMessage)[]): Q.Promise<void> {
+    var deferred = Q.defer<void>();
+    
     var messageIndex = 0;
-    return (requestBody: su.AppMessage) => {
+    testMessageCallback = (requestBody: su.AppMessage) => {
         try {
             console.log("Message index: " + messageIndex);
             if (typeof expectedMessages[messageIndex] === "string") {
-                assert.equal(expectedMessages[messageIndex], requestBody.message);
+                assert.equal(requestBody.message, expectedMessages[messageIndex]);
             }
             else {
-                assert(su.areEqual(<su.AppMessage>expectedMessages[messageIndex], requestBody));
+                assert(su.areEqual(requestBody, <su.AppMessage>expectedMessages[messageIndex]));
             }
             /* end of message array */
             if (++messageIndex === expectedMessages.length) {
@@ -261,6 +293,8 @@ export function verifyMessages(expectedMessages: (string | su.AppMessage)[], def
             deferred.reject(e);
         }
     };
+    
+    return deferred.promise;
 };
 
 /** The server to respond to requests from the app. */
@@ -330,7 +364,31 @@ export function cleanupServer(): void {
 /**
  * Call this function with a ProjectManager and an array of TestBuilderDescribe objects to run tests
  */
-export function initializeTests(projectManager: tm.ProjectManager, tests: TestBuilderDescribe[]): void {
+export function initializeTests(projectManager: tm.ProjectManager, tests: TestBuilderDescribe[], supportedTargetPlatforms: platform.IPlatform[]): void {
+    
+    // DETERMINE PLATFORMS TO TEST //
+    
+    /** The platforms to test on. */
+    var targetPlatforms: platform.IPlatform[];
+    
+    supportedTargetPlatforms.forEach(supportedPlatform => {
+        if (testUtil.readMochaCommandLineFlag(supportedPlatform.getCommandLineFlagName())) targetPlatforms.push(supportedPlatform);
+    });
+    
+    // Log current configuration
+    
+    console.log("Initializing tests for " + testUtil.getPluginName());
+    console.log(TestAppName + "\t" + TestNamespace);
+    console.log("Testing " + thisPluginPath + ".");
+    targetPlatforms.forEach(platform => {
+        console.log("On " + platform.getName());
+    });
+    console.log("test run directory = " + testRunDirectory);
+    console.log("updates directory = " + updatesDirectory);
+    if (onlyRunCoreTests) console.log("--only running core tests--");
+    if (shouldSetup) console.log("--setting up--");
+    if (restartEmulators) console.log("--restarting emulators--");
+    
     // FUNCTIONS //
 
     function cleanupTest(): void {
@@ -378,17 +436,10 @@ export function initializeTests(projectManager: tm.ProjectManager, tests: TestBu
      * Creates and runs the tests from the projectManager and TestBuilderDescribe objects passed to initializeTests.
      */
     function createAndRunTests(targetPlatform: platform.IPlatform): void {
-        /**
-         * Prepares for the next test
-         */
-        function prepareTest(): Q.Promise<string> {
-            return projectManager.prepareEmulatorForTest(TestNamespace, targetPlatform);
-        }
-        
         describe("CodePush", function() {
             before(() => {
                 setupServer(targetPlatform);
-                return projectManager.uninstallApplication(TestNamespace, targetPlatform)
+                return targetPlatform.getEmulatorManager().uninstallApplication(TestNamespace)
                     .then(projectManager.preparePlatform.bind(projectManager, testRunDirectory, targetPlatform))
                     .then(projectManager.preparePlatform.bind(projectManager, updatesDirectory, targetPlatform));
             });
@@ -405,7 +456,7 @@ export function initializeTests(projectManager: tm.ProjectManager, tests: TestBu
         });
     }
 
-    // CODE THAT EXECUTES THE TESTS //
+    // BEGIN TESTING //
 
     describe("CodePush " + projectManager.getPluginName() + " Plugin", function () {
         this.timeout(100 * 60 * 1000);

@@ -4,6 +4,9 @@ import path = require("path");
 import tu = require("./testUtil");
 import Q = require("q");
 
+//////////////////////////////////////////////////////////////////////////////////////////
+// BASE INTERFACES
+
 /**
  * Defines a platform supported by CodePush.
  */
@@ -14,14 +17,15 @@ export interface IPlatform {
     getName(): string;
     
     /**
+     * The command line flag used to determine whether or not this platform should run.
+     * Runs when the flag is present, doesn't run otherwise.
+     */
+    getCommandLineFlagName(): string;
+    
+    /**
      * Gets the server url used for testing.
      */
     getServerUrl(): string;
-    
-    /**
-     * Gets the root of the platform www folder used for creating update packages.
-     */
-    getPlatformWwwPath(projectDirectory: string): string;
     
     /**
      * Gets an IEmulatorManager that is used to control the emulator during the tests.
@@ -38,6 +42,11 @@ export interface IPlatform {
  * Manages the interaction with the emulator.
  */
 export interface IEmulatorManager {
+    /**
+     * Returns the target emulator, which is specified through the command line.
+     */
+    getTargetEmulator(): Q.Promise<string>;
+    
     /**
      * Boots the target emulator.
      */
@@ -61,7 +70,7 @@ export interface IEmulatorManager {
     /**
      * Navigates away from the current app, waits for a delay (defaults to 1 second), then navigates to the specified app.
      */
-    resumeApplication(appId: string, delayBeforeResumingMs: number): Q.Promise<string>;
+    resumeApplication(appId: string, delayBeforeResumingMs?: number): Q.Promise<string>;
     
     /**
      * Prepares the emulator for a test.
@@ -74,11 +83,13 @@ export interface IEmulatorManager {
     uninstallApplication(appId: string): Q.Promise<string>;
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////
+// PLATFORMS
+
 /**
  * Android implementations of IPlatform.
  */
 export class Android implements IPlatform {
-    private static instance: Android;
     private emulatorManager: IEmulatorManager;
     private serverUrl: string;
     
@@ -86,34 +97,42 @@ export class Android implements IPlatform {
         this.emulatorManager = emulatorManager;
     }
 
-    public static getInstance(): Android {
-        if (!this.instance) {
-            this.instance = new Android(new AndroidEmulatorManager());
-        }
-
-        return this.instance;
-    }
-
+    /**
+     * Gets the platform name. (e.g. "android" for the Android platform).
+     */
     public getName(): string {
         return "android";
     }
     
     /**
+     * The command line flag used to determine whether or not this platform should run.
+     * Runs when the flag is present, doesn't run otherwise.
+     */
+    public getCommandLineFlagName(): string {
+        return "--android";
+    }
+
+    private static ANDROID_SERVER_URL_OPTION_NAME: string = "--androidserver";
+    private static DEFAULT_ANDROID_SERVER_URL: string = "http://10.0.2.2:3001";
+    
+    /**
      * Gets the server url used for testing.
      */
     public getServerUrl(): string {
-        if (!this.serverUrl) this.serverUrl = tu.TestUtil.readAndroidServerUrl();
+        if (!this.serverUrl) this.serverUrl = tu.TestUtil.readMochaCommandLineOption(Android.ANDROID_SERVER_URL_OPTION_NAME, Android.DEFAULT_ANDROID_SERVER_URL);
         return this.serverUrl;
     }
 
-    public getPlatformWwwPath(projectDirectory: string): string {
-        return path.join(projectDirectory, "platforms/android/assets/www");
-    }
-
+    /**
+     * Gets an IEmulatorManager that is used to control the emulator during the tests.
+     */
     public getEmulatorManager(): IEmulatorManager {
         return this.emulatorManager;
     }
 
+    /**
+     * Gets the default deployment key.
+     */
     public getDefaultDeploymentKey(): string {
         return "mock-android-deployment-key";
     }
@@ -123,51 +142,64 @@ export class Android implements IPlatform {
  * IOS implementation of IPlatform.
  */
 export class IOS implements IPlatform {
-    private static instance: IOS;
     private emulatorManager: IEmulatorManager;
     private serverUrl: string;
 
     constructor(emulatorManager: IEmulatorManager) {
         this.emulatorManager = emulatorManager;
     }
-
-    public static getInstance(): IOS {
-        if (!this.instance) {
-            this.instance = new IOS(new IOSEmulatorManager());
-        }
-
-        return this.instance;
-    }
-
+    
+    /**
+     * Gets the platform name. (e.g. "android" for the Android platform).
+     */
     public getName(): string {
         return "ios";
     }
     
     /**
+     * The command line flag used to determine whether or not this platform should run.
+     * Runs when the flag is present, doesn't run otherwise.
+     */
+    public getCommandLineFlagName(): string {
+        return "--ios";
+    }
+    
+    private static IOS_SERVER_URL_OPTION_NAME: string = "--iosserver";
+    private static DEFAULT_IOS_SERVER_URL: string = "http://127.0.0.1:3000";
+    
+    /**
      * Gets the server url used for testing.
      */
     public getServerUrl(): string {
-        if (!this.serverUrl) this.serverUrl = tu.TestUtil.readIOSServerUrl();
+        if (!this.serverUrl) this.serverUrl = tu.TestUtil.readMochaCommandLineOption(IOS.IOS_SERVER_URL_OPTION_NAME, IOS.DEFAULT_IOS_SERVER_URL);
         return this.serverUrl;
     }
 
-    public getPlatformWwwPath(projectDirectory: string): string {
-        return path.join(projectDirectory, "platforms/ios/www");
-    }
-
+    /**
+     * Gets an IEmulatorManager that is used to control the emulator during the tests.
+     */
     public getEmulatorManager(): IEmulatorManager {
         return this.emulatorManager;
     }
 
+    /**
+     * Gets the default deployment key.
+     */
     public getDefaultDeploymentKey(): string {
         return "mock-ios-deployment-key";
     }
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////
+// EMULATOR MANAGERS
+
 // bootEmulatorInternal constants
 const emulatorMaxReadyAttempts = 5;
 const emulatorReadyCheckDelayMs = 30 * 1000;
-// Called to boot an emulator with a given platformName and check, start, and kill methods.
+
+/**
+ * Helper function for EmulatorManager implementations to use to boot an emulator with a given platformName and check, start, and kill methods.
+ */
 function bootEmulatorInternal(platformName: string, restartEmulators: boolean, targetEmulator: string,
     checkEmulator: () => Q.Promise<string>, startEmulator: (targetEmulator: string) => Q.Promise<string>, killEmulator: () => Q.Promise<string>): Q.Promise<string> {
     var deferred = Q.defer<string>();
@@ -235,106 +267,21 @@ function bootEmulatorInternal(platformName: string, restartEmulators: boolean, t
     return deferred.promise;
 }
 
-export class IOSEmulatorManager implements IEmulatorManager {
-    /**
-     * Boots the target emulator.
-     */
-    bootEmulator(restartEmulators: boolean): Q.Promise<string> {
-        function checkIOSEmulator(): Q.Promise<string> {
-            // A command that does nothing but only succeeds if the emulator is running.
-            // Get the environment variable with the name "asdf" (return null, not an error, if not initialized).
-            return tu.TestUtil.getProcessOutput("xcrun simctl getenv booted asdf");
-        }
-        function startIOSEmulator(iOSEmulatorName: string): Q.Promise<string> {
-            return tu.TestUtil.getProcessOutput("xcrun instruments -w \"" + iOSEmulatorName + "\"")
-                .catch((error) => { return undefined; /* Always fails because we do not specify a template, which is not necessary to just start the emulator */ });
-        }
-        function killIOSEmulator(): Q.Promise<string> {
-            return tu.TestUtil.getProcessOutput("killall Simulator");
-        }
-        
-        return tu.TestUtil.readIOSEmulator()
-            .then((iOSEmulatorName: string) => {
-                return bootEmulatorInternal("iOS", restartEmulators, iOSEmulatorName, checkIOSEmulator, startIOSEmulator, killIOSEmulator);
-            });
-    }
-    
-    /**
-     * Launches an already installed application by app id.
-     */
-    launchInstalledApplication(appId: string): Q.Promise<string> {
-        return tu.TestUtil.getProcessOutput("xcrun simctl launch booted " + appId, undefined);
-    }
-    
-    /**
-     * Ends a running application given its app id.
-     */
-    endRunningApplication(appId: string): Q.Promise<string> {
-        return tu.TestUtil.getProcessOutput("xcrun simctl spawn booted launchctl list", undefined)
-            .then<string>(processListOutput => {
-                // find the app's process
-                var regex = new RegExp("(\\S+" + appId + "\\S+)");
-                var execResult: any[] = regex.exec(processListOutput);
-                if (execResult) {
-                    return execResult[0];
-                }
-                else {
-                    return Q.reject("Could not get the running application label.");
-                }
-            })
-            .then<string>(applicationLabel => {
-                // kill the app if we found the process
-                return tu.TestUtil.getProcessOutput("xcrun simctl spawn booted launchctl stop " + applicationLabel, undefined);
-            }, (error) => {
-                // we couldn't find the app's process so it must not be running
-                return Q.resolve(error);
-            });
-    }
-    
-    /**
-     * Restarts an already installed application by app id.
-     */
-    restartApplication(appId: string): Q.Promise<string> {
-        return this.endRunningApplication(appId)
-            .then<void>(() => {
-                // wait for a second before restarting
-                return Q.delay(1000);
-            })
-            .then(() => this.launchInstalledApplication(appId));
-    }
-    
-    /**
-     * Navigates away from the current app, waits for a delay (defaults to 1 second), then navigates to the specified app.
-     */
-    resumeApplication(appId: string, delayBeforeResumingMs: number = 1000): Q.Promise<string> {
-        // open a default iOS app (for example, camera)
-        return this.launchInstalledApplication("com.apple.camera")
-            .then<void>(() => {
-                console.log("Waiting for " + delayBeforeResumingMs + "ms before resuming the test application.");
-                return Q.delay(delayBeforeResumingMs);
-            })
-            .then<string>(() => {
-                // reopen the app
-                return this.launchInstalledApplication(appId);
-            });
-    }
-    
-    /**
-     * Prepares the emulator for a test.
-     */
-    prepareEmulatorForTest(appId: string): Q.Promise<string> {
-        return this.endRunningApplication(appId);
-    }
-    
-    /**
-     * Uninstalls the app from the emulator.
-     */
-    uninstallApplication(appId: string): Q.Promise<string> {
-        return tu.TestUtil.getProcessOutput("xcrun simctl uninstall booted " + appId, undefined);
-    }
-}
-
 export class AndroidEmulatorManager implements IEmulatorManager {
+
+    private static ANDROID_EMULATOR_OPTION_NAME: string = "--androidemu";
+    private static DEFAULT_ANDROID_EMULATOR: string = "emulator";
+    
+    private targetEmulator: string;
+    
+    /**
+     * Returns the target emulator, which is specified through the command line.
+     */
+    getTargetEmulator(): Q.Promise<string> {
+        if (this.targetEmulator) return Q<string>(this.targetEmulator);
+        else return Q<string>(tu.TestUtil.readMochaCommandLineOption(AndroidEmulatorManager.ANDROID_EMULATOR_OPTION_NAME, AndroidEmulatorManager.DEFAULT_ANDROID_EMULATOR));
+    }
+    
     /**
      * Boots the target emulator.
      */
@@ -351,7 +298,10 @@ export class AndroidEmulatorManager implements IEmulatorManager {
             return tu.TestUtil.getProcessOutput("adb emu kill");
         }
         
-        return bootEmulatorInternal("Android", restartEmulators, tu.TestUtil.readAndroidEmulator(), checkAndroidEmulator, startAndroidEmulator, killAndroidEmulator);
+        return this.getTargetEmulator()
+            .then<string>((targetEmulator) => {
+                return bootEmulatorInternal("Android", restartEmulators, targetEmulator, checkAndroidEmulator, startAndroidEmulator, killAndroidEmulator);
+            });
     }
     
     /**
@@ -374,7 +324,7 @@ export class AndroidEmulatorManager implements IEmulatorManager {
     restartApplication(appId: string): Q.Promise<string> {
         return this.endRunningApplication(appId)
             .then<void>(() => {
-                // wait for a second before restarting
+                // Wait for a second before restarting.
                 return Q.delay(1000);
             })
             .then<string>(() => {
@@ -386,14 +336,14 @@ export class AndroidEmulatorManager implements IEmulatorManager {
      * Navigates away from the current app, waits for a delay (defaults to 1 second), then navigates to the specified app.
      */
     resumeApplication(appId: string, delayBeforeResumingMs: number = 1000): Q.Promise<string> {
-        // open a default Android app (for example, settings)
+        // Open a default Android app (for example, settings).
         return this.launchInstalledApplication("com.android.settings")
             .then<void>(() => {
                 console.log("Waiting for " + delayBeforeResumingMs + "ms before resuming the test application.");
                 return Q.delay(delayBeforeResumingMs);
             })
             .then<string>(() => {
-                // reopen the app
+                // Reopen the app.
                 return this.launchInstalledApplication(appId);
             });
     }
@@ -414,44 +364,141 @@ export class AndroidEmulatorManager implements IEmulatorManager {
     }
 }
 
-/**
- * Supported platforms resolver.
- */
-export class PlatformResolver {
-
-    private static supportedPlatforms: IPlatform[] = [Android.getInstance(), IOS.getInstance()];
-
+export class IOSEmulatorManager implements IEmulatorManager {
+    
+    private static IOS_EMULATOR_OPTION_NAME: string = "--iosemu";
+    
+    private targetEmulator: string;
+    
     /**
-     * Given the cordova name of a platform, this method returns the IPlatform associated with it.
+     * Returns the target emulator, which is specified through the command line.
      */
-    public static resolvePlatforms(cordovaPlatformNames: string[]): IPlatform[] {
-        var platforms: IPlatform[] = [];
-
-        for (var i = 0; i < cordovaPlatformNames.length; i++) {
-            var resolvedPlatform: IPlatform = PlatformResolver.resolvePlatform(cordovaPlatformNames[i]);
-            if (resolvedPlatform) platforms.push(resolvedPlatform);
-            else {
-                // we could not find this platform in the list of platforms, so abort
-                console.error("Unsupported platform: " + cordovaPlatformNames[i]);
-                return undefined;
-            }
-        }
+    getTargetEmulator(): Q.Promise<string> {
+        if (this.targetEmulator) return Q<string>(this.targetEmulator);
+        else {
+            var deferred = Q.defer<string>();
         
-        return platforms;
+            var targetIOSEmulator: string = tu.TestUtil.readMochaCommandLineOption(IOSEmulatorManager.IOS_EMULATOR_OPTION_NAME);
+            
+            if (!targetIOSEmulator) {
+                // If no iOS simulator is specified, get the most recent iOS simulator to run tests on.
+                tu.TestUtil.getProcessOutput("xcrun simctl list")
+                    .then<string>(
+                        (listOfDevices: string) => {
+                            var phoneDevice = /iPhone (\S* )*(\(([0-9A-Z-]*)\))/g;
+                            var match = listOfDevices.match(phoneDevice);
+                            targetIOSEmulator = match[match.length - 1];
+                            deferred.resolve(targetIOSEmulator);
+                            return targetIOSEmulator;
+                        },
+                        (error) => {
+                            deferred.reject(error);
+                            return error;
+                        }
+                    );
+            } else {
+                // Use the simulator specified on the command line.
+                deferred.resolve(targetIOSEmulator);
+            }
+            
+            return deferred.promise;
+        }
     }
-
+    
     /**
-     * Given the cordova name of a platform, this method returns the IPlatform associated with it.
+     * Boots the target emulator.
      */
-    public static resolvePlatform(cordovaPlatformName: string): IPlatform {
-        for (var i = 0; i < this.supportedPlatforms.length; i++) {
-            if (this.supportedPlatforms[i].getName() === cordovaPlatformName) {
-                return this.supportedPlatforms[i];
-            }
+    bootEmulator(restartEmulators: boolean): Q.Promise<string> {
+        function checkIOSEmulator(): Q.Promise<string> {
+            // A command that does nothing but only succeeds if the emulator is running.
+            // Get the environment variable with the name "asdf" (return null, not an error, if not initialized).
+            return tu.TestUtil.getProcessOutput("xcrun simctl getenv booted asdf");
+        }
+        function startIOSEmulator(iOSEmulatorName: string): Q.Promise<string> {
+            return tu.TestUtil.getProcessOutput("xcrun instruments -w \"" + iOSEmulatorName + "\"")
+                .catch((error) => { return undefined; /* Always fails because we do not specify a template, which is not necessary to just start the emulator */ });
+        }
+        function killIOSEmulator(): Q.Promise<string> {
+            return tu.TestUtil.getProcessOutput("killall Simulator");
         }
         
-        // we could not find this platform in the list of platforms, so abort
-        console.error("Unsupported platform: " + cordovaPlatformName);
-        return undefined;
+        return this.getTargetEmulator()
+            .then<string>((targetEmulator) => {
+                return bootEmulatorInternal("iOS", restartEmulators, targetEmulator, checkIOSEmulator, startIOSEmulator, killIOSEmulator);
+            });
+    }
+    
+    /**
+     * Launches an already installed application by app id.
+     */
+    launchInstalledApplication(appId: string): Q.Promise<string> {
+        return tu.TestUtil.getProcessOutput("xcrun simctl launch booted " + appId, undefined);
+    }
+    
+    /**
+     * Ends a running application given its app id.
+     */
+    endRunningApplication(appId: string): Q.Promise<string> {
+        return tu.TestUtil.getProcessOutput("xcrun simctl spawn booted launchctl list", undefined)
+            .then<string>(processListOutput => {
+                // Find the app's process.
+                var regex = new RegExp("(\\S+" + appId + "\\S+)");
+                var execResult: any[] = regex.exec(processListOutput);
+                if (execResult) {
+                    return execResult[0];
+                }
+                else {
+                    return Q.reject("Could not get the running application label.");
+                }
+            })
+            .then<string>(applicationLabel => {
+                // Kill the app if we found the process.
+                return tu.TestUtil.getProcessOutput("xcrun simctl spawn booted launchctl stop " + applicationLabel, undefined);
+            }, (error) => {
+                // We couldn't find the app's process so it must not be running.
+                return Q.resolve(error);
+            });
+    }
+    
+    /**
+     * Restarts an already installed application by app id.
+     */
+    restartApplication(appId: string): Q.Promise<string> {
+        return this.endRunningApplication(appId)
+            .then<void>(() => {
+                // Wait for a second before restarting.
+                return Q.delay(1000);
+            })
+            .then(() => this.launchInstalledApplication(appId));
+    }
+    
+    /**
+     * Navigates away from the current app, waits for a delay (defaults to 1 second), then navigates to the specified app.
+     */
+    resumeApplication(appId: string, delayBeforeResumingMs: number = 1000): Q.Promise<string> {
+        // Open a default iOS app (for example, camera).
+        return this.launchInstalledApplication("com.apple.camera")
+            .then<void>(() => {
+                console.log("Waiting for " + delayBeforeResumingMs + "ms before resuming the test application.");
+                return Q.delay(delayBeforeResumingMs);
+            })
+            .then<string>(() => {
+                // Reopen the app.
+                return this.launchInstalledApplication(appId);
+            });
+    }
+    
+    /**
+     * Prepares the emulator for a test.
+     */
+    prepareEmulatorForTest(appId: string): Q.Promise<string> {
+        return this.endRunningApplication(appId);
+    }
+    
+    /**
+     * Uninstalls the app from the emulator.
+     */
+    uninstallApplication(appId: string): Q.Promise<string> {
+        return tu.TestUtil.getProcessOutput("xcrun simctl uninstall booted " + appId, undefined);
     }
 }
