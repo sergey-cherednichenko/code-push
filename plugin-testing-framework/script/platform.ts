@@ -279,7 +279,11 @@ export class AndroidEmulatorManager implements IEmulatorManager {
      */
     getTargetEmulator(): Q.Promise<string> {
         if (this.targetEmulator) return Q<string>(this.targetEmulator);
-        else return Q<string>(tu.TestUtil.readMochaCommandLineOption(AndroidEmulatorManager.ANDROID_EMULATOR_OPTION_NAME, AndroidEmulatorManager.DEFAULT_ANDROID_EMULATOR));
+        else {
+            this.targetEmulator = tu.TestUtil.readMochaCommandLineOption(AndroidEmulatorManager.ANDROID_EMULATOR_OPTION_NAME, AndroidEmulatorManager.DEFAULT_ANDROID_EMULATOR);
+            console.log("Using Android emulator named " + this.targetEmulator);
+            return Q<string>(this.targetEmulator);
+        }
     }
     
     /**
@@ -289,7 +293,7 @@ export class AndroidEmulatorManager implements IEmulatorManager {
         function checkAndroidEmulator(): Q.Promise<string> {
             // A command that does nothing but only succeeds if the emulator is running.
             // List all of the packages on the device.
-            return tu.TestUtil.getProcessOutput("adb shell pm list packages");
+            return tu.TestUtil.getProcessOutput("adb shell pm list packages", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true });
         }
         function startAndroidEmulator(androidEmulatorName: string): Q.Promise<string> {
             return tu.TestUtil.getProcessOutput("emulator @" + androidEmulatorName);
@@ -382,18 +386,17 @@ export class IOSEmulatorManager implements IEmulatorManager {
             
             if (!targetIOSEmulator) {
                 // If no iOS simulator is specified, get the most recent iOS simulator to run tests on.
-                tu.TestUtil.getProcessOutput("xcrun simctl list")
+                tu.TestUtil.getProcessOutput("xcrun simctl list", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true })
                     .then<string>(
                         (listOfDevices: string) => {
                             var phoneDevice = /iPhone (\S* )*(\(([0-9A-Z-]*)\))/g;
                             var match = listOfDevices.match(phoneDevice);
-                            targetIOSEmulator = match[match.length - 1];
-                            deferred.resolve(targetIOSEmulator);
-                            return targetIOSEmulator;
+                            deferred.resolve(match[match.length - 1]);
+                            return undefined;
                         },
                         (error) => {
                             deferred.reject(error);
-                            return error;
+                            return undefined;
                         }
                     );
             } else {
@@ -401,7 +404,12 @@ export class IOSEmulatorManager implements IEmulatorManager {
                 deferred.resolve(targetIOSEmulator);
             }
             
-            return deferred.promise;
+            return deferred.promise
+                .then<string>((targetEmulator: string) => {
+                    this.targetEmulator = targetEmulator;
+                    console.log("Using iOS simulator named " + this.targetEmulator);
+                    return this.targetEmulator;
+                });
         }
     }
     
@@ -412,10 +420,10 @@ export class IOSEmulatorManager implements IEmulatorManager {
         function checkIOSEmulator(): Q.Promise<string> {
             // A command that does nothing but only succeeds if the emulator is running.
             // Get the environment variable with the name "asdf" (return null, not an error, if not initialized).
-            return tu.TestUtil.getProcessOutput("xcrun simctl getenv booted asdf");
+            return tu.TestUtil.getProcessOutput("xcrun simctl getenv booted asdf", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true });
         }
         function startIOSEmulator(iOSEmulatorName: string): Q.Promise<string> {
-            return tu.TestUtil.getProcessOutput("xcrun instruments -w \"" + iOSEmulatorName + "\"")
+            return tu.TestUtil.getProcessOutput("xcrun instruments -w \"" + iOSEmulatorName + "\"", { noLogStdErr: true })
                 .catch((error) => { return undefined; /* Always fails because we do not specify a template, which is not necessary to just start the emulator */ });
         }
         function killIOSEmulator(): Q.Promise<string> {
@@ -439,7 +447,7 @@ export class IOSEmulatorManager implements IEmulatorManager {
      * Ends a running application given its app id.
      */
     endRunningApplication(appId: string): Q.Promise<string> {
-        return tu.TestUtil.getProcessOutput("xcrun simctl spawn booted launchctl list", undefined)
+        return tu.TestUtil.getProcessOutput("xcrun simctl spawn booted launchctl list", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true })
             .then<string>(processListOutput => {
                 // Find the app's process.
                 var regex = new RegExp("(\\S+" + appId + "\\S+)");

@@ -76,7 +76,7 @@ export class TestBuilder {
     public only: boolean;
     public skip: boolean;
     
-    constructor(options: any) {
+    constructor(options?: { only?: boolean, skip?: boolean }) {
         if (!options) return;
         
         if (!!options.only) this.only = options.only;
@@ -101,10 +101,10 @@ export class TestBuilderDescribe extends TestBuilder {
     private scenarioPath: string;
     /** An array of nested TestBuilder objects that this describe contains */
     private testBuilders: TestBuilder[];
-    /** Whether or not this.testBuilders directly contains any TestBuildIt objects */
+    /** Whether or not this.testBuilders directly contains any TestBuilderIt objects */
     private hasIts: boolean;
-    /** Whether or not this.testBuilders directly contains any TestBuilder objects that are only */
-    public hasOnly: boolean;
+    /** Whether or not this.testBuilders directly contains any TestBuilder objects with an only flag */
+    private hasOnly: boolean;
     
     /**
      * describeName - used as the description in the call to describe
@@ -112,7 +112,7 @@ export class TestBuilderDescribe extends TestBuilder {
      * testBuilders - the testBuilders to create within this describe call
      * only - if true, use describe.only
      */
-    constructor(describeName: string, testBuilders: TestBuilder[], scenarioPath?: string, options?: any) {
+    constructor(describeName: string, testBuilders: TestBuilder[], scenarioPath?: string, options?: { only?: boolean, skip?: boolean }) {
         super(options);
         
         this.describeName = describeName;
@@ -120,13 +120,13 @@ export class TestBuilderDescribe extends TestBuilder {
         this.testBuilders = testBuilders;
         
         this.hasIts = false;
-        this.hasOnly = false;
         for (var i = 0; i < this.testBuilders.length; i++) {
             if (this.testBuilders[i] instanceof TestBuilderIt) {
                 this.hasIts = true;
                 if (this.hasIts && this.hasOnly) break;
             }
-            if (this.testBuilders[i].only || (this.testBuilders[i] instanceof TestBuilderDescribe && (<TestBuilderDescribe>this.testBuilders[i]).hasOnly)) {
+            if (this.testBuilders[i].only) {
+                this.only = true;
                 this.hasOnly = true;
                 if (this.hasIts && this.hasOnly) break;
             }
@@ -186,7 +186,7 @@ export class TestBuilderIt extends TestBuilder {
      * isCoreTest - whether or not the test should run when "--core" is supplied
      * only - if true, use it.only
      */
-    constructor(testName: string, test: (projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform, done: MochaDone) => void, isCoreTest: boolean, options?: any) {
+    constructor(testName: string, test: (projectManager: tm.ProjectManager, targetPlatform: platform.IPlatform, done: MochaDone) => void, isCoreTest: boolean, options?: { only?: boolean, skip?: boolean }) {
         super(options);
         
         this.testName = testName;
@@ -364,12 +364,12 @@ export function cleanupServer(): void {
 /**
  * Call this function with a ProjectManager and an array of TestBuilderDescribe objects to run tests
  */
-export function initializeTests(projectManager: tm.ProjectManager, tests: TestBuilderDescribe[], supportedTargetPlatforms: platform.IPlatform[]): void {
+export function initializeTests(projectManager: tm.ProjectManager, rootTest: TestBuilder, supportedTargetPlatforms: platform.IPlatform[]): void {
     
     // DETERMINE PLATFORMS TO TEST //
     
     /** The platforms to test on. */
-    var targetPlatforms: platform.IPlatform[];
+    var targetPlatforms: platform.IPlatform[] = [];
     
     supportedTargetPlatforms.forEach(supportedPlatform => {
         if (testUtil.readMochaCommandLineFlag(supportedPlatform.getCommandLineFlagName())) targetPlatforms.push(supportedPlatform);
@@ -378,7 +378,7 @@ export function initializeTests(projectManager: tm.ProjectManager, tests: TestBu
     // Log current configuration
     
     console.log("Initializing tests for " + testUtil.getPluginName());
-    console.log(TestAppName + "\t" + TestNamespace);
+    console.log(TestAppName + "\n" + TestNamespace);
     console.log("Testing " + thisPluginPath + ".");
     targetPlatforms.forEach(platform => {
         console.log("On " + platform.getName());
@@ -449,10 +449,8 @@ export function initializeTests(projectManager: tm.ProjectManager, tests: TestBu
                 return projectManager.cleanupAfterPlatform(testRunDirectory, targetPlatform).then(projectManager.cleanupAfterPlatform.bind(projectManager, updatesDirectory, targetPlatform));
             });
             
-            // build the tests through the TestBuilders
-            tests.forEach(test => {
-                test.create(onlyRunCoreTests, projectManager, targetPlatform);
-            });
+            // Build the tests through the root test.
+            rootTest.create(onlyRunCoreTests, projectManager, targetPlatform);
         });
     }
 

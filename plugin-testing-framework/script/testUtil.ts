@@ -71,30 +71,42 @@ export class TestUtil {
             timeout?: number;
             maxBuffer?: number;
             killSignal?: string;
-        }, logStdOut: boolean = false, logStdErr: boolean = true): Q.Promise<string> {
+            noLogCommand?: boolean;
+            noLogStdOut?: boolean;
+            noLogStdErr?: boolean;
+        }): Q.Promise<string> {
         
         var deferred = Q.defer<string>();
 
         options = options || {};
         
         // set default options
-        if (options.maxBuffer == undefined) options.maxBuffer = 1024 * 500;
-        if (options.timeout == undefined) options.timeout = 10 * 60 * 1000;
+        if (options.maxBuffer === undefined) options.maxBuffer = 1024 * 500;
+        if (options.timeout === undefined) options.timeout = 10 * 60 * 1000;
 
-        console.log("Running command: " + command);
+        if (!options.noLogCommand) console.log("Running command: " + command);
 
-        child_process.exec(command, options, (error: Error, stdout: Buffer, stderr: Buffer) => {
-
-            if (logStdOut && stdout) stdout && console.log(stdout);
-            if (logStdErr && stderr) stderr && console.error(stderr);
-
+        var execProcess = child_process.exec(command, options, (error: Error, stdout: Buffer, stderr: Buffer) => {
             if (error) {
-                if (logStdErr) console.error("" + error);
+                if (!options.noLogStdErr) console.error("" + error);
                 deferred.reject(error);
             } else {
                 deferred.resolve(stdout.toString());
             }
         });
+        
+        execProcess.stdout.on('data', function (data: any) {
+            if (!options.noLogStdOut) console.log("" + data);
+        });
+
+        execProcess.stderr.on('data', function (data: any) {
+            if (!options.noLogStdErr) console.error("" + data);
+        });
+        
+        execProcess.on('error', function (error: any) {
+            if (!options.noLogStdErr) console.error("" + error);
+            deferred.reject(error);
+        })
 
         return deferred.promise;
     }

@@ -95,7 +95,7 @@ gulp.task("scripts-dtsbundle-plugin", ["scripts-compile-plugin"], function () {
         main: "code-push-plugin-testing-framework/script/index",
         baseDir: "plugin-testing-framework/bin/definitions",
         files: ["script/index.d.ts"],
-        out: "definitions/generated/code-push-plugin-testing-framework.d.ts"
+        out: "plugin-testing-framework/bin/typings/code-push-plugin-testing-framework.d.ts"
     });
 });
 
