@@ -95,13 +95,8 @@ export class TestUtil {
             }
         });
         
-        execProcess.stdout.on('data', function (data: any) {
-            if (!options.noLogStdOut) console.log("" + data);
-        });
-
-        execProcess.stderr.on('data', function (data: any) {
-            if (!options.noLogStdErr) console.error("" + data);
-        });
+        if (!options.noLogStdOut) execProcess.stdout.pipe(process.stdout);
+        if (!options.noLogStdErr) execProcess.stderr.pipe(process.stderr);
         
         execProcess.on('error', function (error: any) {
             if (!options.noLogStdErr) console.error("" + error);

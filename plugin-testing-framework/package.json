@@ -1,6 +1,6 @@
 {
   "name": "code-push-plugin-testing-framework",
-  "version": "1.9.0-beta",
+  "version": "0.0.1",
   "description": "Plugin Testing Framework for CodePush Plugins",
   "main": "script/index.js",
   "scripts": {
