@@ -5,6 +5,7 @@
 import assert = require("assert");
 var bodyparser = require("body-parser");
 var express = require("express");
+import fs = require("fs");
 import os = require("os");
 import path = require("path");
 import platform = require("./platform");
@@ -25,14 +26,15 @@ const DEFAULT_TEST_RUN_DIRECTORY = path.join(os.tmpdir(), testUtil.getPluginName
 const TEST_UPDATES_DIRECTORY_OPTION_NAME: string = "--updates-directory";
 const DEFAULT_UPDATES_DIRECTORY = path.join(os.tmpdir(), testUtil.getPluginName(), "updates");
 
-const CORE_TESTS_ONLY_OPTION_NAME: string = "--core";
+const CORE_TESTS_ONLY_FLAG_NAME: string = "--core";
 
-const PULL_FROM_NPM_OPTION_NAME: string = "--npm";
-const NPM_PLUGIN_PATH: string = "cordova-plugin-code-push";
+const PULL_FROM_NPM_FLAG_NAME: string = "--npm";
+
 const DEFAULT_PLUGIN_PATH: string = path.join(__dirname, "../../..");
+const NPM_PLUGIN_PATH: string = testUtil.getPluginName();
 
-const SETUP_OPTION_NAME: string = "--setup";
-const RESTART_EMULATORS_OPTION_NAME: string = "--clean";
+const SETUP_FLAG_NAME: string = "--setup";
+const RESTART_EMULATORS_FLAG_NAME: string = "--clean";
 
 //// CONST VARIABLES
 // Used to configure the tests.
@@ -42,14 +44,14 @@ export const TestNamespace = "com.microsoft.codepush.test";
 export const AcquisitionSDKPluginName = "code-push";
 
 export const templatePath = path.join(__dirname, "../../../test/template");
-export const thisPluginPath = testUtil.readMochaCommandLineFlag(PULL_FROM_NPM_OPTION_NAME) ? NPM_PLUGIN_PATH : DEFAULT_PLUGIN_PATH;
+export const thisPluginPath = testUtil.readMochaCommandLineFlag(PULL_FROM_NPM_FLAG_NAME) ? NPM_PLUGIN_PATH : DEFAULT_PLUGIN_PATH;
 
 export const testRunDirectory = testUtil.readMochaCommandLineOption(TEST_RUN_DIRECTORY_OPTION_NAME, DEFAULT_TEST_RUN_DIRECTORY);
 export const updatesDirectory = testUtil.readMochaCommandLineOption(TEST_UPDATES_DIRECTORY_OPTION_NAME, DEFAULT_UPDATES_DIRECTORY);
 
-export const onlyRunCoreTests = testUtil.readMochaCommandLineFlag(CORE_TESTS_ONLY_OPTION_NAME);
-export const shouldSetup: boolean = testUtil.readMochaCommandLineFlag(SETUP_OPTION_NAME);
-export const restartEmulators: boolean = testUtil.readMochaCommandLineFlag(RESTART_EMULATORS_OPTION_NAME);
+export const onlyRunCoreTests = testUtil.readMochaCommandLineFlag(CORE_TESTS_ONLY_FLAG_NAME);
+export const shouldSetup: boolean = testUtil.readMochaCommandLineFlag(SETUP_FLAG_NAME);
+export const restartEmulators: boolean = testUtil.readMochaCommandLineFlag(RESTART_EMULATORS_FLAG_NAME);
 
 //// SERVER VARIABLES
 // Control how the server responds to update checks, test messages, and downloads.
