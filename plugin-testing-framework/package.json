@@ -15,6 +15,8 @@
   "homepage": "https://microsoft.github.io/code-push",
   "dependencies": {
     "base-64": "^0.1.0",
+    "mocha" : "latest",
+    "mocha-junit-reporter" : "latest",
     "node-uuid": "^1.4.3",
     "q": "^1.4.1",
     "replace": "latest",

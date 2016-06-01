@@ -1,8 +1,8 @@
 "use strict";
 
 import path = require("path");
-import tu = require("./testUtil");
 import Q = require("q");
+import { TestUtil } from "./testUtil";
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // BASE INTERFACES
@@ -119,7 +119,7 @@ export class Android implements IPlatform {
      * Gets the server url used for testing.
      */
     public getServerUrl(): string {
-        if (!this.serverUrl) this.serverUrl = tu.TestUtil.readMochaCommandLineOption(Android.ANDROID_SERVER_URL_OPTION_NAME, Android.DEFAULT_ANDROID_SERVER_URL);
+        if (!this.serverUrl) this.serverUrl = TestUtil.readMochaCommandLineOption(Android.ANDROID_SERVER_URL_OPTION_NAME, Android.DEFAULT_ANDROID_SERVER_URL);
         return this.serverUrl;
     }
 
@@ -171,7 +171,7 @@ export class IOS implements IPlatform {
      * Gets the server url used for testing.
      */
     public getServerUrl(): string {
-        if (!this.serverUrl) this.serverUrl = tu.TestUtil.readMochaCommandLineOption(IOS.IOS_SERVER_URL_OPTION_NAME, IOS.DEFAULT_IOS_SERVER_URL);
+        if (!this.serverUrl) this.serverUrl = TestUtil.readMochaCommandLineOption(IOS.IOS_SERVER_URL_OPTION_NAME, IOS.DEFAULT_IOS_SERVER_URL);
         return this.serverUrl;
     }
 
@@ -280,7 +280,7 @@ export class AndroidEmulatorManager implements IEmulatorManager {
     getTargetEmulator(): Q.Promise<string> {
         if (this.targetEmulator) return Q<string>(this.targetEmulator);
         else {
-            this.targetEmulator = tu.TestUtil.readMochaCommandLineOption(AndroidEmulatorManager.ANDROID_EMULATOR_OPTION_NAME, AndroidEmulatorManager.DEFAULT_ANDROID_EMULATOR);
+            this.targetEmulator = TestUtil.readMochaCommandLineOption(AndroidEmulatorManager.ANDROID_EMULATOR_OPTION_NAME, AndroidEmulatorManager.DEFAULT_ANDROID_EMULATOR);
             console.log("Using Android emulator named " + this.targetEmulator);
             return Q<string>(this.targetEmulator);
         }
@@ -293,13 +293,13 @@ export class AndroidEmulatorManager implements IEmulatorManager {
         function checkAndroidEmulator(): Q.Promise<string> {
             // A command that does nothing but only succeeds if the emulator is running.
             // List all of the packages on the device.
-            return tu.TestUtil.getProcessOutput("adb shell pm list packages", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true });
+            return TestUtil.getProcessOutput("adb shell pm list packages", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true });
         }
         function startAndroidEmulator(androidEmulatorName: string): Q.Promise<string> {
-            return tu.TestUtil.getProcessOutput("emulator @" + androidEmulatorName);
+            return TestUtil.getProcessOutput("emulator @" + androidEmulatorName);
         }
         function killAndroidEmulator(): Q.Promise<string> {
-            return tu.TestUtil.getProcessOutput("adb emu kill");
+            return TestUtil.getProcessOutput("adb emu kill");
         }
         
         return this.getTargetEmulator()
@@ -312,14 +312,14 @@ export class AndroidEmulatorManager implements IEmulatorManager {
      * Launches an already installed application by app id.
      */
     launchInstalledApplication(appId: string): Q.Promise<string> {
-        return tu.TestUtil.getProcessOutput("adb shell monkey -p " + appId + " -c android.intent.category.LAUNCHER 1");
+        return TestUtil.getProcessOutput("adb shell monkey -p " + appId + " -c android.intent.category.LAUNCHER 1");
     }
     
     /**
      * Ends a running application given its app id.
      */
     endRunningApplication(appId: string): Q.Promise<string> {
-        return tu.TestUtil.getProcessOutput("adb shell am force-stop " + appId);
+        return TestUtil.getProcessOutput("adb shell am force-stop " + appId);
     }
     
     /**
@@ -357,14 +357,14 @@ export class AndroidEmulatorManager implements IEmulatorManager {
      */
     prepareEmulatorForTest(appId: string): Q.Promise<string> {
         return this.endRunningApplication(appId)
-            .then(() => { return tu.TestUtil.getProcessOutput("adb shell pm clear " + appId); });
+            .then(() => { return TestUtil.getProcessOutput("adb shell pm clear " + appId); });
     }
     
     /**
      * Uninstalls the app from the emulator.
      */
     uninstallApplication(appId: string): Q.Promise<string> {
-        return tu.TestUtil.getProcessOutput("adb uninstall " + appId);
+        return TestUtil.getProcessOutput("adb uninstall " + appId);
     }
 }
 
@@ -382,11 +382,11 @@ export class IOSEmulatorManager implements IEmulatorManager {
         else {
             var deferred = Q.defer<string>();
         
-            var targetIOSEmulator: string = tu.TestUtil.readMochaCommandLineOption(IOSEmulatorManager.IOS_EMULATOR_OPTION_NAME);
+            var targetIOSEmulator: string = TestUtil.readMochaCommandLineOption(IOSEmulatorManager.IOS_EMULATOR_OPTION_NAME);
             
             if (!targetIOSEmulator) {
                 // If no iOS simulator is specified, get the most recent iOS simulator to run tests on.
-                tu.TestUtil.getProcessOutput("xcrun simctl list", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true })
+                TestUtil.getProcessOutput("xcrun simctl list", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true })
                     .then<string>(
                         (listOfDevices: string) => {
                             var phoneDevice = /iPhone (\S* )*(\(([0-9A-Z-]*)\))/g;
@@ -420,14 +420,14 @@ export class IOSEmulatorManager implements IEmulatorManager {
         function checkIOSEmulator(): Q.Promise<string> {
             // A command that does nothing but only succeeds if the emulator is running.
             // Get the environment variable with the name "asdf" (return null, not an error, if not initialized).
-            return tu.TestUtil.getProcessOutput("xcrun simctl getenv booted asdf", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true });
+            return TestUtil.getProcessOutput("xcrun simctl getenv booted asdf", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true });
         }
         function startIOSEmulator(iOSEmulatorName: string): Q.Promise<string> {
-            return tu.TestUtil.getProcessOutput("xcrun instruments -w \"" + iOSEmulatorName + "\"", { noLogStdErr: true })
+            return TestUtil.getProcessOutput("xcrun instruments -w \"" + iOSEmulatorName + "\"", { noLogStdErr: true })
                 .catch((error) => { return undefined; /* Always fails because we do not specify a template, which is not necessary to just start the emulator */ });
         }
         function killIOSEmulator(): Q.Promise<string> {
-            return tu.TestUtil.getProcessOutput("killall Simulator");
+            return TestUtil.getProcessOutput("killall Simulator");
         }
         
         return this.getTargetEmulator()
@@ -440,14 +440,14 @@ export class IOSEmulatorManager implements IEmulatorManager {
      * Launches an already installed application by app id.
      */
     launchInstalledApplication(appId: string): Q.Promise<string> {
-        return tu.TestUtil.getProcessOutput("xcrun simctl launch booted " + appId, undefined);
+        return TestUtil.getProcessOutput("xcrun simctl launch booted " + appId, undefined);
     }
     
     /**
      * Ends a running application given its app id.
      */
     endRunningApplication(appId: string): Q.Promise<string> {
-        return tu.TestUtil.getProcessOutput("xcrun simctl spawn booted launchctl list", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true })
+        return TestUtil.getProcessOutput("xcrun simctl spawn booted launchctl list", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true })
             .then<string>(processListOutput => {
                 // Find the app's process.
                 var regex = new RegExp("(\\S+" + appId + "\\S+)");
@@ -461,7 +461,7 @@ export class IOSEmulatorManager implements IEmulatorManager {
             })
             .then<string>(applicationLabel => {
                 // Kill the app if we found the process.
-                return tu.TestUtil.getProcessOutput("xcrun simctl spawn booted launchctl stop " + applicationLabel, undefined);
+                return TestUtil.getProcessOutput("xcrun simctl spawn booted launchctl stop " + applicationLabel, undefined);
             }, (error) => {
                 // We couldn't find the app's process so it must not be running.
                 return Q.resolve(error);
@@ -507,6 +507,6 @@ export class IOSEmulatorManager implements IEmulatorManager {
      * Uninstalls the app from the emulator.
      */
     uninstallApplication(appId: string): Q.Promise<string> {
-        return tu.TestUtil.getProcessOutput("xcrun simctl uninstall booted " + appId, undefined);
+        return TestUtil.getProcessOutput("xcrun simctl uninstall booted " + appId, undefined);
     }
 }

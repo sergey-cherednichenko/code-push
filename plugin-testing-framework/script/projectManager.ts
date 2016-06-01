@@ -1,11 +1,8 @@
 "use strict";
 
-import child_process = require("child_process");
-import fs = require("fs");
-import path = require("path");
 import Q = require("q");
-
 import platform = require("./platform");
+import TestConfig = require("./testConfig");
 
 /**
  * In charge of project related operations.
@@ -16,7 +13,7 @@ export class ProjectManager {
     private static NOT_IMPLEMENTED_ERROR_MSG: string = "This method is unimplemented! Please extend ProjectManager and overwrite it!";
     
     //// ABSTRACT METHODS
-    // (not actually abstract because there are some issues with our dts generator that incorrectly generates abstract classes)
+    // (not actually abstract because there are some issues with our dts generator that causes it to incorrectly generate abstract classes)
     
     /**
      * Returns the name of the plugin being tested, for example Cordova or React-Native.
@@ -67,4 +64,22 @@ export class ProjectManager {
      * Overwrite this in your implementation!
      */
     public runApplication(projectDirectory: string, targetPlatform: platform.IPlatform): Q.Promise<string> { throw ProjectManager.NOT_IMPLEMENTED_ERROR_MSG; }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// Wrapper functions for simpler code in test cases.
+
+/**
+ * Wrapper for ProjectManager.setupScenario in the TestRun directory.
+ */
+export function setupTestRunScenario(projectManager: ProjectManager, targetPlatform: platform.IPlatform, scenarioJsPath: string, version?: string): Q.Promise<string> {
+    return projectManager.setupScenario(TestConfig.testRunDirectory, TestConfig.TestNamespace, TestConfig.templatePath, scenarioJsPath, targetPlatform, version);
+}
+
+/**
+ * Creates an update and zip for the test app using the specified scenario and version.
+ */
+export function setupUpdateScenario(projectManager: ProjectManager, targetPlatform: platform.IPlatform, scenarioJsPath: string, version: string): Q.Promise<string> {
+    return projectManager.setupScenario(TestConfig.updatesDirectory, TestConfig.TestNamespace, TestConfig.templatePath, scenarioJsPath, targetPlatform, version)
+        .then<string>(projectManager.createUpdateArchive.bind(projectManager, TestConfig.updatesDirectory, targetPlatform));
 }

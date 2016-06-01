@@ -9,7 +9,6 @@ import path = require("path");
 var replace = require("replace");
 import Q = require("q");
 
-
 export class TestUtil {
     //// Placeholders
     // Used in the template to represent data that needs to be added by the testing framework at runtime.
@@ -152,9 +151,9 @@ export class TestUtil {
     }
     
     /**
-     * Archives the contents of targetFolder and puts it in an archive at archivePath.
+     * Archives the contents of sourceFolder and puts it in an archive at archivePath in targetFolder.
      */
-    public static archiveFolder(targetFolder: string, archivePath: string, isDiff: boolean): Q.Promise<string> {
+    public static archiveFolder(sourceFolder: string, targetFolder: string, archivePath: string, isDiff: boolean): Q.Promise<string> {
         var deferred = Q.defer<string>();
         var archive = archiver.create("zip", {});
         
@@ -177,7 +176,7 @@ export class TestUtil {
             archive.append(`{"deletedFiles":[]}`, { name: "hotcodepush.json" });
         }
         
-        archive.directory(targetFolder);
+        archive.directory(sourceFolder, targetFolder);
         archive.pipe(writeStream);
         archive.finalize();
 
