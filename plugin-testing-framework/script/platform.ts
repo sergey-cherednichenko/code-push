@@ -232,12 +232,14 @@ function bootEmulatorInternal(platformName: string, restartEmulators: boolean, t
     // Loops checks to see if the emulator is ready and eventually fails after surpassing emulatorMaxReadyAttempts.
     function checkEmulatorReadyLooper(): Q.Promise<void> {
         var looperDeferred = Q.defer<void>();
+        
         emulatorReadyAttempts++;
         if (emulatorReadyAttempts > emulatorMaxReadyAttempts) {
             console.log(platformName + " emulator is not ready after " + emulatorMaxReadyAttempts + " attempts, abort.");
             deferred.reject(platformName + " emulator failed to boot.");
             looperDeferred.resolve(undefined);
         }
+        
         setTimeout(() => {
                 checkEmulatorReady()
                     .then(() => {
@@ -247,6 +249,7 @@ function bootEmulatorInternal(platformName: string, restartEmulators: boolean, t
                         return checkEmulatorReadyLooper().then(() => { looperDeferred.resolve(undefined); }, () => { looperDeferred.reject(undefined); });
                     });
             }, emulatorReadyCheckDelayMs);
+            
         return looperDeferred.promise;
     }
     
@@ -256,6 +259,7 @@ function bootEmulatorInternal(platformName: string, restartEmulators: boolean, t
         startEmulator(targetEmulator).catch((error) => { console.log(error); deferred.reject(error); });
         return checkEmulatorReadyLooper();
     }
+    
     var promise: Q.Promise<void>;
     if (restartEmulators) {
         console.log("Killing " + platformName + " emulator.");
@@ -295,9 +299,11 @@ export class AndroidEmulatorManager implements IEmulatorManager {
             // List all of the packages on the device.
             return TestUtil.getProcessOutput("adb shell pm list packages", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true }).then(() => { return null; });
         }
+        
         function startAndroidEmulator(androidEmulatorName: string): Q.Promise<void> {
             return TestUtil.getProcessOutput("emulator @" + androidEmulatorName).then(() => { return null; });
         }
+        
         function killAndroidEmulator(): Q.Promise<void> {
             return TestUtil.getProcessOutput("adb emu kill").then(() => { return null; });
         }
@@ -422,10 +428,12 @@ export class IOSEmulatorManager implements IEmulatorManager {
             // Get the environment variable with the name "asdf" (return null, not an error, if not initialized).
             return TestUtil.getProcessOutput("xcrun simctl getenv booted asdf", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true }).then(() => { return null; });
         }
+        
         function startIOSEmulator(iOSEmulatorName: string): Q.Promise<void> {
             return TestUtil.getProcessOutput("xcrun instruments -w \"" + iOSEmulatorName + "\"", { noLogStdErr: true })
                 .catch((error) => { return undefined; /* Always fails because we do not specify a template, which is not necessary to just start the emulator */ }).then(() => { return null; });
         }
+        
         function killIOSEmulator(): Q.Promise<void> {
             return TestUtil.getProcessOutput("killall Simulator").then(() => { return null; });
         }

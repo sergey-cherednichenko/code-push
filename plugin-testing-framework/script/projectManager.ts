@@ -22,12 +22,12 @@ export class ProjectManager {
      */
     public getPluginName(): string { throw ProjectManager.NOT_IMPLEMENTED_ERROR_MSG; }
 
-	/**
-	 * Creates a new test application at the specified path, and configures it
-	 * with the given server URL, android and ios deployment keys.
+    /**
+     * Creates a new test application at the specified path, and configures it
+     * with the given server URL, android and ios deployment keys.
      * 
      * Overwrite this in your implementation!
-	 */
+     */
     public setupProject(projectDirectory: string, templatePath: string, appName: string, appNamespace: string, version: string = ProjectManager.DEFAULT_APP_VERSION): Q.Promise<void> { throw ProjectManager.NOT_IMPLEMENTED_ERROR_MSG; }
     
     /**
