@@ -393,16 +393,14 @@ export class IOSEmulatorManager implements IEmulatorManager {
             if (!targetIOSEmulator) {
                 // If no iOS simulator is specified, get the most recent iOS simulator to run tests on.
                 TestUtil.getProcessOutput("xcrun simctl list", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true })
-                    .then<string>(
+                    .then<void>(
                         (listOfDevices: string) => {
                             var phoneDevice = /iPhone (\S* )*(\(([0-9A-Z-]*)\))/g;
                             var match = listOfDevices.match(phoneDevice);
                             deferred.resolve(match[match.length - 1]);
-                            return undefined;
                         },
                         (error) => {
                             deferred.reject(error);
-                            return undefined;
                         }
                     );
             } else {
