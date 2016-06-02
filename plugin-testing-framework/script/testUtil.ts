@@ -124,8 +124,8 @@ export class TestUtil {
     /**
      * Copies a file from a given location to another.
      */
-    public static copyFile(source: string, destination: string, overwrite: boolean): Q.Promise<string> {
-        var deferred = Q.defer<string>();
+    public static copyFile(source: string, destination: string, overwrite: boolean): Q.Promise<void> {
+        var deferred = Q.defer<void>();
 
         try {
             var errorHandler = (error: any) => {

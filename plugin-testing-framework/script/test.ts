@@ -58,7 +58,7 @@ export function initializeTests(projectManager: ProjectManager, rootTest: TestBu
      */
     function setupTests(): void {
         it("sets up tests correctly", (done) => {
-            var promises: Q.Promise<string>[] = [];
+            var promises: Q.Promise<void>[] = [];
             
             targetPlatforms.forEach(platform => {
                 promises.push(platform.getEmulatorManager().bootEmulator(TestConfig.restartEmulators));
@@ -71,16 +71,16 @@ export function initializeTests(projectManager: ProjectManager, rootTest: TestBu
                     console.log("Building update project.");
                     // create the update project
                     return createTestProject(TestConfig.updatesDirectory);
-                }));
+                }).then(() => { return null; }));
                 
-            Q.all<string>(promises).then(() => { done(); }, (error) => { done(error); });
+            Q.all<void>(promises).then(() => { done(); }, (error) => { done(error); });
         });
     }
 
     /**
      * Creates a test project directory at the given path.
      */
-    function createTestProject(directory: string): Q.Promise<string> {
+    function createTestProject(directory: string): Q.Promise<void> {
         return projectManager.setupProject(directory, TestConfig.templatePath, TestConfig.TestAppName, TestConfig.TestNamespace);
     }
 

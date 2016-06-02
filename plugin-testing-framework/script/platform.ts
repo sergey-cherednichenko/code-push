@@ -50,37 +50,37 @@ export interface IEmulatorManager {
     /**
      * Boots the target emulator.
      */
-    bootEmulator(restartEmulators: boolean): Q.Promise<string>;
+    bootEmulator(restartEmulators: boolean): Q.Promise<void>;
     
     /**
      * Launches an already installed application by app id.
      */
-    launchInstalledApplication(appId: string): Q.Promise<string>;
+    launchInstalledApplication(appId: string): Q.Promise<void>;
     
     /**
      * Ends a running application given its app id.
      */
-    endRunningApplication(appId: string): Q.Promise<string>;
+    endRunningApplication(appId: string): Q.Promise<void>;
     
     /**
      * Restarts an already installed application by app id.
      */
-    restartApplication(appId: string): Q.Promise<string>;
+    restartApplication(appId: string): Q.Promise<void>;
     
     /**
      * Navigates away from the current app, waits for a delay (defaults to 1 second), then navigates to the specified app.
      */
-    resumeApplication(appId: string, delayBeforeResumingMs?: number): Q.Promise<string>;
+    resumeApplication(appId: string, delayBeforeResumingMs?: number): Q.Promise<void>;
     
     /**
      * Prepares the emulator for a test.
      */
-    prepareEmulatorForTest(appId: string): Q.Promise<string>;
+    prepareEmulatorForTest(appId: string): Q.Promise<void>;
     
     /**
      * Uninstalls the app from the emulator.
      */
-    uninstallApplication(appId: string): Q.Promise<string>;
+    uninstallApplication(appId: string): Q.Promise<void>;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -201,19 +201,19 @@ const emulatorReadyCheckDelayMs = 30 * 1000;
  * Helper function for EmulatorManager implementations to use to boot an emulator with a given platformName and check, start, and kill methods.
  */
 function bootEmulatorInternal(platformName: string, restartEmulators: boolean, targetEmulator: string,
-    checkEmulator: () => Q.Promise<string>, startEmulator: (targetEmulator: string) => Q.Promise<string>, killEmulator: () => Q.Promise<string>): Q.Promise<string> {
-    var deferred = Q.defer<string>();
+    checkEmulator: () => Q.Promise<void>, startEmulator: (targetEmulator: string) => Q.Promise<void>, killEmulator: () => Q.Promise<void>): Q.Promise<void> {
+    var deferred = Q.defer<void>();
     console.log("Setting up " + platformName + " emulator.");
     
-    function onEmulatorReady(): Q.Promise<string> {
+    function onEmulatorReady(): Q.Promise<void> {
         console.log(platformName + " emulator is ready!");
         deferred.resolve(undefined);
         return deferred.promise;
     }
 
     // Called to check if the emulator for the platform is initialized.
-    function checkEmulatorReady(): Q.Promise<string> {
-        var checkDeferred = Q.defer<string>();
+    function checkEmulatorReady(): Q.Promise<void> {
+        var checkDeferred = Q.defer<void>();
         
         console.log("Checking if " + platformName + " emulator is ready yet...");
         // Dummy command that succeeds if emulator is ready and fails otherwise.
@@ -230,8 +230,8 @@ function bootEmulatorInternal(platformName: string, restartEmulators: boolean, t
     
     var emulatorReadyAttempts = 0;
     // Loops checks to see if the emulator is ready and eventually fails after surpassing emulatorMaxReadyAttempts.
-    function checkEmulatorReadyLooper(): Q.Promise<string> {
-        var looperDeferred = Q.defer<string>();
+    function checkEmulatorReadyLooper(): Q.Promise<void> {
+        var looperDeferred = Q.defer<void>();
         emulatorReadyAttempts++;
         if (emulatorReadyAttempts > emulatorMaxReadyAttempts) {
             console.log(platformName + " emulator is not ready after " + emulatorMaxReadyAttempts + " attempts, abort.");
@@ -251,12 +251,12 @@ function bootEmulatorInternal(platformName: string, restartEmulators: boolean, t
     }
     
     // Starts and loops the emulator.
-    function startEmulatorAndLoop(): Q.Promise<string> {
+    function startEmulatorAndLoop(): Q.Promise<void> {
         console.log("Booting " + platformName + " emulator named " + targetEmulator + ".");
         startEmulator(targetEmulator).catch((error) => { console.log(error); deferred.reject(error); });
         return checkEmulatorReadyLooper();
     }
-    var promise: Q.Promise<string>;
+    var promise: Q.Promise<void>;
     if (restartEmulators) {
         console.log("Killing " + platformName + " emulator.");
         promise = killEmulator().catch(() => { return null; }).then(startEmulatorAndLoop);
@@ -289,21 +289,21 @@ export class AndroidEmulatorManager implements IEmulatorManager {
     /**
      * Boots the target emulator.
      */
-    bootEmulator(restartEmulators: boolean): Q.Promise<string> {
-        function checkAndroidEmulator(): Q.Promise<string> {
+    bootEmulator(restartEmulators: boolean): Q.Promise<void> {
+        function checkAndroidEmulator(): Q.Promise<void> {
             // A command that does nothing but only succeeds if the emulator is running.
             // List all of the packages on the device.
-            return TestUtil.getProcessOutput("adb shell pm list packages", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true });
+            return TestUtil.getProcessOutput("adb shell pm list packages", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true }).then(() => { return null; });
         }
-        function startAndroidEmulator(androidEmulatorName: string): Q.Promise<string> {
-            return TestUtil.getProcessOutput("emulator @" + androidEmulatorName);
+        function startAndroidEmulator(androidEmulatorName: string): Q.Promise<void> {
+            return TestUtil.getProcessOutput("emulator @" + androidEmulatorName).then(() => { return null; });
         }
-        function killAndroidEmulator(): Q.Promise<string> {
-            return TestUtil.getProcessOutput("adb emu kill");
+        function killAndroidEmulator(): Q.Promise<void> {
+            return TestUtil.getProcessOutput("adb emu kill").then(() => { return null; });
         }
         
         return this.getTargetEmulator()
-            .then<string>((targetEmulator) => {
+            .then<void>((targetEmulator) => {
                 return bootEmulatorInternal("Android", restartEmulators, targetEmulator, checkAndroidEmulator, startAndroidEmulator, killAndroidEmulator);
             });
     }
@@ -311,27 +311,27 @@ export class AndroidEmulatorManager implements IEmulatorManager {
     /**
      * Launches an already installed application by app id.
      */
-    launchInstalledApplication(appId: string): Q.Promise<string> {
-        return TestUtil.getProcessOutput("adb shell monkey -p " + appId + " -c android.intent.category.LAUNCHER 1");
+    launchInstalledApplication(appId: string): Q.Promise<void> {
+        return TestUtil.getProcessOutput("adb shell monkey -p " + appId + " -c android.intent.category.LAUNCHER 1").then(() => { return null; });
     }
     
     /**
      * Ends a running application given its app id.
      */
-    endRunningApplication(appId: string): Q.Promise<string> {
-        return TestUtil.getProcessOutput("adb shell am force-stop " + appId);
+    endRunningApplication(appId: string): Q.Promise<void> {
+        return TestUtil.getProcessOutput("adb shell am force-stop " + appId).then(() => { return null; });
     }
     
     /**
      * Restarts an already installed application by app id.
      */
-    restartApplication(appId: string): Q.Promise<string> {
+    restartApplication(appId: string): Q.Promise<void> {
         return this.endRunningApplication(appId)
             .then<void>(() => {
                 // Wait for a second before restarting.
                 return Q.delay(1000);
             })
-            .then<string>(() => {
+            .then<void>(() => {
             return this.launchInstalledApplication(appId);
         });
     }
@@ -339,14 +339,14 @@ export class AndroidEmulatorManager implements IEmulatorManager {
     /**
      * Navigates away from the current app, waits for a delay (defaults to 1 second), then navigates to the specified app.
      */
-    resumeApplication(appId: string, delayBeforeResumingMs: number = 1000): Q.Promise<string> {
+    resumeApplication(appId: string, delayBeforeResumingMs: number = 1000): Q.Promise<void> {
         // Open a default Android app (for example, settings).
         return this.launchInstalledApplication("com.android.settings")
             .then<void>(() => {
                 console.log("Waiting for " + delayBeforeResumingMs + "ms before resuming the test application.");
                 return Q.delay(delayBeforeResumingMs);
             })
-            .then<string>(() => {
+            .then<void>(() => {
                 // Reopen the app.
                 return this.launchInstalledApplication(appId);
             });
@@ -355,16 +355,16 @@ export class AndroidEmulatorManager implements IEmulatorManager {
     /**
      * Prepares the emulator for a test.
      */
-    prepareEmulatorForTest(appId: string): Q.Promise<string> {
+    prepareEmulatorForTest(appId: string): Q.Promise<void> {
         return this.endRunningApplication(appId)
-            .then(() => { return TestUtil.getProcessOutput("adb shell pm clear " + appId); });
+            .then(() => { return TestUtil.getProcessOutput("adb shell pm clear " + appId); }).then(() => { return null; });
     }
     
     /**
      * Uninstalls the app from the emulator.
      */
-    uninstallApplication(appId: string): Q.Promise<string> {
-        return TestUtil.getProcessOutput("adb uninstall " + appId);
+    uninstallApplication(appId: string): Q.Promise<void> {
+        return TestUtil.getProcessOutput("adb uninstall " + appId).then(() => { return null; });
     }
 }
 
@@ -416,22 +416,22 @@ export class IOSEmulatorManager implements IEmulatorManager {
     /**
      * Boots the target emulator.
      */
-    bootEmulator(restartEmulators: boolean): Q.Promise<string> {
-        function checkIOSEmulator(): Q.Promise<string> {
+    bootEmulator(restartEmulators: boolean): Q.Promise<void> {
+        function checkIOSEmulator(): Q.Promise<void> {
             // A command that does nothing but only succeeds if the emulator is running.
             // Get the environment variable with the name "asdf" (return null, not an error, if not initialized).
-            return TestUtil.getProcessOutput("xcrun simctl getenv booted asdf", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true });
+            return TestUtil.getProcessOutput("xcrun simctl getenv booted asdf", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true }).then(() => { return null; });
         }
-        function startIOSEmulator(iOSEmulatorName: string): Q.Promise<string> {
+        function startIOSEmulator(iOSEmulatorName: string): Q.Promise<void> {
             return TestUtil.getProcessOutput("xcrun instruments -w \"" + iOSEmulatorName + "\"", { noLogStdErr: true })
-                .catch((error) => { return undefined; /* Always fails because we do not specify a template, which is not necessary to just start the emulator */ });
+                .catch((error) => { return undefined; /* Always fails because we do not specify a template, which is not necessary to just start the emulator */ }).then(() => { return null; });
         }
-        function killIOSEmulator(): Q.Promise<string> {
-            return TestUtil.getProcessOutput("killall Simulator");
+        function killIOSEmulator(): Q.Promise<void> {
+            return TestUtil.getProcessOutput("killall Simulator").then(() => { return null; });
         }
         
         return this.getTargetEmulator()
-            .then<string>((targetEmulator) => {
+            .then<void>((targetEmulator) => {
                 return bootEmulatorInternal("iOS", restartEmulators, targetEmulator, checkIOSEmulator, startIOSEmulator, killIOSEmulator);
             });
     }
@@ -439,14 +439,14 @@ export class IOSEmulatorManager implements IEmulatorManager {
     /**
      * Launches an already installed application by app id.
      */
-    launchInstalledApplication(appId: string): Q.Promise<string> {
-        return TestUtil.getProcessOutput("xcrun simctl launch booted " + appId, undefined);
+    launchInstalledApplication(appId: string): Q.Promise<void> {
+        return TestUtil.getProcessOutput("xcrun simctl launch booted " + appId, undefined).then(() => { return null; });
     }
     
     /**
      * Ends a running application given its app id.
      */
-    endRunningApplication(appId: string): Q.Promise<string> {
+    endRunningApplication(appId: string): Q.Promise<void> {
         return TestUtil.getProcessOutput("xcrun simctl spawn booted launchctl list", { noLogCommand: true, noLogStdOut: true, noLogStdErr: true })
             .then<string>(processListOutput => {
                 // Find the app's process.
@@ -459,9 +459,9 @@ export class IOSEmulatorManager implements IEmulatorManager {
                     return Q.reject("Could not get the running application label.");
                 }
             })
-            .then<string>(applicationLabel => {
+            .then<void>(applicationLabel => {
                 // Kill the app if we found the process.
-                return TestUtil.getProcessOutput("xcrun simctl spawn booted launchctl stop " + applicationLabel, undefined);
+                return TestUtil.getProcessOutput("xcrun simctl spawn booted launchctl stop " + applicationLabel, undefined).then(() => { return null; });
             }, (error) => {
                 // We couldn't find the app's process so it must not be running.
                 return Q.resolve(error);
@@ -471,7 +471,7 @@ export class IOSEmulatorManager implements IEmulatorManager {
     /**
      * Restarts an already installed application by app id.
      */
-    restartApplication(appId: string): Q.Promise<string> {
+    restartApplication(appId: string): Q.Promise<void> {
         return this.endRunningApplication(appId)
             .then<void>(() => {
                 // Wait for a second before restarting.
@@ -483,14 +483,14 @@ export class IOSEmulatorManager implements IEmulatorManager {
     /**
      * Navigates away from the current app, waits for a delay (defaults to 1 second), then navigates to the specified app.
      */
-    resumeApplication(appId: string, delayBeforeResumingMs: number = 1000): Q.Promise<string> {
+    resumeApplication(appId: string, delayBeforeResumingMs: number = 1000): Q.Promise<void> {
         // Open a default iOS app (for example, camera).
         return this.launchInstalledApplication("com.apple.camera")
             .then<void>(() => {
                 console.log("Waiting for " + delayBeforeResumingMs + "ms before resuming the test application.");
                 return Q.delay(delayBeforeResumingMs);
             })
-            .then<string>(() => {
+            .then<void>(() => {
                 // Reopen the app.
                 return this.launchInstalledApplication(appId);
             });
@@ -499,14 +499,14 @@ export class IOSEmulatorManager implements IEmulatorManager {
     /**
      * Prepares the emulator for a test.
      */
-    prepareEmulatorForTest(appId: string): Q.Promise<string> {
+    prepareEmulatorForTest(appId: string): Q.Promise<void> {
         return this.endRunningApplication(appId);
     }
     
     /**
      * Uninstalls the app from the emulator.
      */
-    uninstallApplication(appId: string): Q.Promise<string> {
-        return TestUtil.getProcessOutput("xcrun simctl uninstall booted " + appId, undefined);
+    uninstallApplication(appId: string): Q.Promise<void> {
+        return TestUtil.getProcessOutput("xcrun simctl uninstall booted " + appId).then(() => { return null; });
     }
 }
