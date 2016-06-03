@@ -31,7 +31,7 @@ export class TestUtil {
         var optionValue: string = undefined;
 
         for (var i = 0; i < process.argv.length; i++) {
-            if (process.argv[i].indexOf(optionName) === 0) {
+            if (process.argv[i] === optionName) {
                 if (i + 1 < process.argv.length) {
                     optionValue = process.argv[i + 1];
                 }
@@ -49,7 +49,7 @@ export class TestUtil {
 	 */
     public static readMochaCommandLineFlag(optionName: string): boolean {
         for (var i = 0; i < process.argv.length; i++) {
-            if (process.argv[i].indexOf(optionName) === 0) {
+            if (process.argv[i] === optionName) {
                 return true;
             }
         }
