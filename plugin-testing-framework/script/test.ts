@@ -4,11 +4,11 @@
 
 import os = require("os");
 import path = require("path");
-import platform = require("./platform");
+import Platform = require("./platform");
 import Q = require("q");
 import { ProjectManager } from "./projectManager";
 import ServerUtil = require("./serverUtil");
-import TestBuilder = require("./testBuilder");
+import { TestBuilder, TestContext } from "./testBuilder";
 import TestConfig = require("./testConfig");
 import { TestUtil } from "./testUtil";
 
@@ -16,12 +16,12 @@ import { TestUtil } from "./testUtil";
 /**
  * Call this function to initialize the automated tests.
  */
-export function initializeTests(projectManager: ProjectManager, rootTest: TestBuilder.TestBuilderBase, supportedTargetPlatforms: platform.IPlatform[]): void {
+export function initializeTests(projectManager: ProjectManager, supportedTargetPlatforms: Platform.IPlatform[], describeTests: (projectManager: ProjectManager, targetPlatform: Platform.IPlatform) => void): void {
     
     // DETERMINE PLATFORMS TO TEST //
     
     /** The platforms to test on. */
-    var targetPlatforms: platform.IPlatform[] = [];
+    var targetPlatforms: Platform.IPlatform[] = [];
     
     supportedTargetPlatforms.forEach(supportedPlatform => {
         if (TestUtil.readMochaCommandLineFlag(supportedPlatform.getCommandLineFlagName())) targetPlatforms.push(supportedPlatform);
@@ -87,7 +87,7 @@ export function initializeTests(projectManager: ProjectManager, rootTest: TestBu
     /**
      * Creates and runs the tests from the projectManager and TestBuilderDescribe objects passed to initializeTests.
      */
-    function createAndRunTests(targetPlatform: platform.IPlatform): void {
+    function createAndRunTests(targetPlatform: Platform.IPlatform): void {
         describe("CodePush", function() {
             before(() => {
                 ServerUtil.setupServer(targetPlatform);
@@ -100,9 +100,12 @@ export function initializeTests(projectManager: ProjectManager, rootTest: TestBu
                 ServerUtil.cleanupServer();
                 return projectManager.cleanupAfterPlatform(TestConfig.testRunDirectory, targetPlatform).then(projectManager.cleanupAfterPlatform.bind(projectManager, TestConfig.updatesDirectory, targetPlatform));
             });
-            
-            // Build the tests through the root test.
-            rootTest.create(TestConfig.onlyRunCoreTests, projectManager, targetPlatform);
+
+            TestContext.projectManager = projectManager;
+            TestContext.targetPlatform = targetPlatform;
+
+            // Build the tests.
+            describeTests(projectManager, targetPlatform);
         });
     }
 
