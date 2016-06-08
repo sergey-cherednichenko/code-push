@@ -10,7 +10,8 @@ var mochaConfig = {
 
 var projects = {
     "sdk": ["build-sdk"],
-    "cli": ["build-cli"]
+    "cli": ["build-cli"],
+    "e2e": ["build-e2e"]
 };
 
 var projectNames = Object.keys(projects);
