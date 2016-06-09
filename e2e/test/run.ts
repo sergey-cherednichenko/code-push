@@ -6,8 +6,6 @@ var tryJSON = require("try-json");
 function validateApps(result: any): void {
     var apps: CodePush.App[] = tryJSON(result.stdout);
     assert(apps);
-    var appNames: string[] = apps.map((app: CodePush.App) => app.name);
-    console.log(appNames);
 }
 
 function getCommand(args: string) {
