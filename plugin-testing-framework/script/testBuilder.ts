@@ -85,7 +85,12 @@ export interface ITestBuilderTestDefinition {
 
 function itInternal(func: (expectation: string, assertion: (done: MochaDone) => void) => Mocha.ITest | void, expectation: string, isCoreTest: boolean, assertion: (done: MochaDone) => void): Mocha.ITest {
     if ((!TestConfig.onlyRunCoreTests || isCoreTest)) {
-        return it(expectation, assertion);
+        // Create a wrapper around the assertion to set the timeout on the test to 5 minutes.
+        var assertionWithTimeout = function(done: MochaDone) {
+            this.timeout(10 * 60 * 1000);
+            assertion(done);
+        }
+        return it(expectation, assertionWithTimeout);
     }
     return null;
 }
