@@ -1,19 +1,27 @@
 import * as assert from "assert";
-var tryJSON = require("try-json");
+import * as CodePush from "rest-definitions";
 var nixt = require("nixt");
+var tryJSON = require("try-json");
 
 function validateApps(result: any): void {
-    var apps: any[] = tryJSON(result.stdout);
+    var apps: CodePush.App[] = tryJSON(result.stdout);
     assert(apps);
-    var appNames: string[] = apps.map((app: any) => app.name);
+    var appNames: string[] = apps.map((app: CodePush.App) => app.name);
     console.log(appNames);
 }
 
-describe("Codepush app commands", function() {
-  it("app ls", function(done) {
-    nixt()
-        .expect(validateApps)
-        .run("code-push app ls --format json")
-        .end(done);
-  });
+function getCommand(args: string) {
+    return "code-push " + args + " --format json";
+}
+
+describe("CodePush", () => {
+    describe("App commands", () => {
+        it("app ls", (done: any) => {
+            var command: string = getCommand("app ls");
+            nixt()
+                .expect(validateApps)
+                .run(command)
+                .end(done);
+        });
+    });
 });
