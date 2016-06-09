@@ -5,7 +5,7 @@ var plugins = require("gulp-load-plugins")();
 
 var mochaConfig = {
     reporter: process.env.REPORTER || "spec",
-    timeout: parseInt(process.env.TIMEOUT) || 5000
+    timeout: parseInt(process.env.TIMEOUT) || 150000
 };
 
 var projects = {

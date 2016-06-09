@@ -10,6 +10,8 @@
   "author": "Microsoft Corporation",
   "license": "MIT",
   "dependencies": {
-    "nixt": "^0.5.0"
+    "assert": "^1.4.1",
+    "nixt": "^0.5.0",
+    "try-json": "^1.0.0"
   }
 }
