@@ -22,7 +22,7 @@ describe("CodePush", () => {
             .end(done);
     });
 
-    describe("App commands", () => {
+    describe("Running commands", () => {
         it("app ls", (done: any) => {
             var command: string = getCommand("app ls");
             nixt()
