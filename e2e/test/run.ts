@@ -13,6 +13,15 @@ function getCommand(args: string) {
 }
 
 describe("CodePush", () => {
+    before((done) => {
+        nixt()
+            .expect((result: any) => {
+                console.log("\tTesting CodePush CLI version: " + result.stdout);
+            })
+            .run("code-push --v")
+            .end(done);
+    });
+
     describe("App commands", () => {
         it("app ls", (done: any) => {
             var command: string = getCommand("app ls");

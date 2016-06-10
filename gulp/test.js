@@ -11,7 +11,6 @@ var mochaConfig = {
 var projects = {
     "sdk": ["build-sdk"],
     "cli": ["build-cli"],
-    "e2e": ["build-e2e"]
 };
 
 var projectNames = Object.keys(projects);
@@ -53,4 +52,9 @@ projectNames.forEach(function(projectName) {
 
 gulp.task("test", ["build"], function(done) {
     runTests(sourcesPaths, testPaths, done);
+});
+
+gulp.task("test-e2e", ["build-e2e"], function(done) {
+    process.env.PATH = __dirname + "/../e2e/node_modules/.bin:" + process.env.PATH;
+    runTests([sourcePathFromName("e2e")], [testPathFromName("e2e")], done);
 });
