@@ -1,5 +1,11 @@
 import * as assert from "assert";
 import * as CodePush from "rest-definitions";
+import { accessKeyTests } from "./access-key";
+import { appTests } from "./app";
+import { deploymentTests } from "./deployment";
+import { collaboratorTests } from "./collaborator";
+import { releaseTests } from "./release";
+
 var nixt = require("nixt");
 var tryJSON = require("try-json");
 
@@ -8,27 +14,19 @@ function validateApps(result: any): void {
     assert(apps);
 }
 
-function getCommand(args: string) {
-    return "code-push " + args + " --format json";
-}
-
 describe("CodePush", () => {
     before((done) => {
         nixt()
             .expect((result: any) => {
-                console.log("\tTesting CodePush CLI version: " + result.stdout);
+                console.log(`   Testing CodePush CLI version: ${result.stdout}`);
             })
             .run("code-push --v")
             .end(done);
     });
 
-    describe("Running commands", () => {
-        it("app ls", (done: any) => {
-            var command: string = getCommand("app ls");
-            nixt()
-                .expect(validateApps)
-                .run(command)
-                .end(done);
-        });
-    });
+    describe("App commands", () => appTests());
+    describe("Access key commands", () => accessKeyTests());
+    describe("Deployment commands", () => deploymentTests());
+    describe("Collaborator commands", () => collaboratorTests());
+    describe("Release commands", () => releaseTests());
 });

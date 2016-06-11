@@ -1,23 +1,28 @@
 import * as assert from "assert";
 import * as CodePush from "rest-definitions";
+import { getCommand } from "./utils/command";
 var nixt = require("nixt");
 var tryJSON = require("try-json");
 
-function validateApps(result: any): void {
+function validateCollaborator(result: any): void {
     var apps: CodePush.App[] = tryJSON(result.stdout);
     assert(apps);
 }
 
-function getCommand(args: string) {
-    return "code-push " + args + " --format json";
-}
+export function collaboratorTests() {
+    before((done) =>  {
+        done();
+    });
 
-describe("Collaborator commands", () => {
+    after((done) =>  {
+        done();
+    });
+
     it("app ls", (done: any) => {
         var command: string = getCommand("app ls");
         nixt()
-            .expect(validateApps)
+            .expect(validateCollaborator)
             .run(command)
             .end(done);
     });
-});
+}

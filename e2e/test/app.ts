@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import * as CodePush from "rest-definitions";
+import { getCommand } from "./utils/command";
 var nixt = require("nixt");
 var tryJSON = require("try-json");
 
@@ -8,11 +9,15 @@ function validateApps(result: any): void {
     assert(apps);
 }
 
-function getCommand(args: string) {
-    return "code-push " + args + " --format json";
-}
+export function appTests() {
+    before((done) => {
+        done();
+    });
 
-describe("App commands", () => {
+    after((done) => {
+        done();
+    });
+
     it("app ls", (done: any) => {
         var command: string = getCommand("app ls");
         nixt()
@@ -20,4 +25,4 @@ describe("App commands", () => {
             .run(command)
             .end(done);
     });
-});
+}
