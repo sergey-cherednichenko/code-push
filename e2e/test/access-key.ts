@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import * as CodePush from "rest-definitions";
-import { getCommand } from "./utils/command";
+import { Command } from "./utils/command";
 var nixt = require("nixt");
 var tryJSON = require("try-json");
 
@@ -19,10 +19,9 @@ export function accessKeyTests() {
     });
 
     it("app ls", (done: any) => {
-        var command: string = getCommand("app ls");
         nixt()
             .expect(validateAccessKey)
-            .run(command)
+            .run(Command.appLs())
             .end(done);
     });
 }
