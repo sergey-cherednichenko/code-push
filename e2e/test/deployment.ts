@@ -1,55 +1,18 @@
 import * as assert from "assert";
 import * as CodePush from "rest-definitions";
-import { Command, validateResponse } from "./utils/command";
-import { getErrorAppNotFound, getErrorDeploymentConflict, getErrorDeploymentNotFound } from "./utils/error";
+import { Command } from "./utils/command";
+import { Error } from "./utils/error";
 import { makeRandomString } from "./utils/misc";
-import { getSuccessAppAdd, getSuccessDeploymentAdd, getSuccessDeploymentRename, getSuccessDeploymentRm } from "./utils/success";
+import { Success } from "./utils/success";
+import { Validate } from "./utils/validate";
 var nixt = require("nixt");
 var tryJSON = require("try-json");
-
-function validateDeployments(deployments: CodePush.Deployment[]): void {
-    assert(deployments);
-    
-    // No two deployments for a single app can share the same name or key.
-    var doesNameExist: { [name: string]: boolean } = {};
-    var doesKeyExist: { [key: string]: boolean } = {};
-    
-    deployments.forEach((deployment: CodePush.Deployment) => {
-        assert(!doesNameExist[deployment.name]);
-        doesNameExist[deployment.name] = true;
-        
-        assert(!doesKeyExist[deployment.key]);
-        doesKeyExist[deployment.key] = true;
-    });
-}
-
-function validateAndCheckForDeployments(deploymentTuplesToCheck: { [deploymentName: string]: boolean }): (deployments: CodePush.Deployment[]) => void {
-    return validateResponse((deployments: CodePush.Deployment[]) => {
-        validateDeployments(deployments);
-        
-        deployments.forEach((deployment: CodePush.Deployment) => {
-            assert(deploymentTuplesToCheck[deployment.name] === true || deploymentTuplesToCheck[deployment.name] === undefined);
-            if (deploymentTuplesToCheck[deployment.name]) {
-                delete deploymentTuplesToCheck[deployment.name];
-            }
-        });
-        
-        // At this point, all deployment tuples remaining in the map should be ones that should not be in the list of deployments.
-        for (var deploymentName in deploymentTuplesToCheck) {
-            assert(deploymentTuplesToCheck[deploymentName] === false);
-        }
-    });
-}
-
-function validateAndCheckForDeployment(deploymentName: string, exists: boolean): (deployments: CodePush.Deployment[]) => void {
-    return validateAndCheckForDeployments({ [deploymentName]: exists });
-}
 
 export function deploymentTests() {
     var appName: string = makeRandomString();
     before((done) => {
         nixt()
-            .stdout(getSuccessAppAdd(appName))
+            .stdout(Success.appAdd(appName))
             .run(Command.appAdd(appName))
             .end(done);
     });
@@ -57,7 +20,7 @@ export function deploymentTests() {
     describe("deployment ls", () => {
         it("succeeds", (done: any) => {
             nixt()
-                .expect(validateResponse(validateDeployments))
+                .expect(Validate.Deployments())
                 .run(Command.deploymentLs(appName))
                 .end(done);
         });
@@ -66,7 +29,7 @@ export function deploymentTests() {
             var fakeAppName: string = "not_a_real_app";
             
             nixt()
-                .stderr(getErrorAppNotFound(fakeAppName))
+                .stderr(Error.appNotFound(fakeAppName))
                 .run(Command.deploymentLs(fakeAppName))
                 .end(done);
         });
@@ -78,21 +41,21 @@ export function deploymentTests() {
             deploymentName = makeRandomString();
             
             nixt()
-                .stdout(getSuccessDeploymentAdd(deploymentName, appName))
+                .stdout(Success.deploymentAdd(deploymentName, appName))
                 .run(Command.deploymentAdd(deploymentName, appName))
                 .end(done);
         });
         
         it("succeeds", (done) => {
             nixt()
-                .expect(validateAndCheckForDeployment(deploymentName, true))
+                .expect(Validate.Deployments.checkFor(deploymentName, true))
                 .run(Command.deploymentLs(appName))
                 .end(done);
         });
         
         it("fails if deployment conflict", (done) => {
             nixt()
-                .stderr(getErrorDeploymentConflict(deploymentName))
+                .stderr(Error.deploymentConflict(deploymentName))
                 .run(Command.deploymentAdd(deploymentName, appName))
                 .end(done);
         });
@@ -101,7 +64,7 @@ export function deploymentTests() {
             var fakeAppName: string = "not_a_real_app";
             
             nixt()
-                .stderr(getErrorAppNotFound(fakeAppName))
+                .stderr(Error.appNotFound(fakeAppName))
                 .run(Command.deploymentAdd(deploymentName, fakeAppName))
                 .end(done);
         });
@@ -113,19 +76,19 @@ export function deploymentTests() {
             deploymentName = makeRandomString();
             
             nixt()
-                .stdout(getSuccessDeploymentAdd(deploymentName, appName))
+                .stdout(Success.deploymentAdd(deploymentName, appName))
                 .run(Command.deploymentAdd(deploymentName, appName))
                 .end(done);
         });
         
         it("succeeds with Y", (done: any) => {
             nixt()
-                .stdout(getSuccessDeploymentRm(deploymentName, appName))
+                .stdout(Success.deploymentRm(deploymentName, appName))
                 .run(Command.deploymentRm(deploymentName, appName))
                 .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
                 .end(() => {
                     nixt()
-                        .expect(validateAndCheckForDeployment(deploymentName, false))
+                        .expect(Validate.Deployments.checkFor(deploymentName, false))
                         .run(Command.deploymentLs(appName))
                         .end(done);
                 });
@@ -138,7 +101,7 @@ export function deploymentTests() {
                 .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_REJECT)
                 .end(() => {
                     nixt()
-                        .expect(validateAndCheckForDeployment(deploymentName, true))
+                        .expect(Validate.Deployments.checkFor(deploymentName, true))
                         .run(Command.deploymentLs(appName))
                         .end(done);
                 });
@@ -148,7 +111,7 @@ export function deploymentTests() {
             var fakeAppName: string = "not_a_real_app";
             
             nixt()
-                .stderr(getErrorAppNotFound(fakeAppName))
+                .stderr(Error.appNotFound(fakeAppName))
                 .run(Command.deploymentRm(deploymentName, fakeAppName))
                 .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
                 .end(done);
@@ -158,7 +121,7 @@ export function deploymentTests() {
             var fakeDeploymentName: string = "not_a_real_deployment";
             
             nixt()
-                .stderr(getErrorDeploymentNotFound(fakeDeploymentName))
+                .stderr(Error.deploymentNotFound(fakeDeploymentName))
                 .run(Command.deploymentRm(fakeDeploymentName, appName))
                 .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
                 .end(done);
@@ -173,18 +136,18 @@ export function deploymentTests() {
             newDeploymentName = makeRandomString();
             
             nixt()
-                .stdout(getSuccessDeploymentAdd(oldDeploymentName, appName))
+                .stdout(Success.deploymentAdd(oldDeploymentName, appName))
                 .run(Command.deploymentAdd(oldDeploymentName, appName))
                 .end(done);
         });
         
         it("succeeds", (done: any) => {
             nixt()
-                .stdout(getSuccessDeploymentRename(oldDeploymentName, newDeploymentName, appName))
+                .stdout(Success.deploymentRename(oldDeploymentName, newDeploymentName, appName))
                 .run(Command.deploymentRename(oldDeploymentName, newDeploymentName, appName))
                 .end(() => {
                     nixt()
-                        .expect(validateAndCheckForDeployments({ [oldDeploymentName]: false, [newDeploymentName]: true }))
+                        .expect(Validate.Deployments.checkForMany({ [oldDeploymentName]: false, [newDeploymentName]: true }))
                         .run(Command.deploymentLs(appName))
                         .end(done);
                 });
@@ -194,7 +157,7 @@ export function deploymentTests() {
             var fakeAppName: string = "not_a_real_app";
             
             nixt()
-                .stderr(getErrorAppNotFound(fakeAppName))
+                .stderr(Error.appNotFound(fakeAppName))
                 .run(Command.deploymentRename(oldDeploymentName, newDeploymentName, fakeAppName))
                 .end(done);
         });
@@ -203,18 +166,18 @@ export function deploymentTests() {
             var fakeDeploymentName: string = "not_a_real_deployment";
             
             nixt()
-                .stderr(getErrorDeploymentNotFound(fakeDeploymentName))
+                .stderr(Error.deploymentNotFound(fakeDeploymentName))
                 .run(Command.deploymentRename(fakeDeploymentName, newDeploymentName, appName))
                 .end(done);
         });
         
         it("fails if deployment conflict", (done: any) => {
             nixt()
-                .stdout(getSuccessDeploymentAdd(newDeploymentName, appName))
+                .stdout(Success.deploymentAdd(newDeploymentName, appName))
                 .run(Command.deploymentAdd(newDeploymentName, appName))
                 .end(() => {
                     nixt()
-                        .stderr(getErrorDeploymentConflict(newDeploymentName))
+                        .stderr(Error.deploymentConflict(newDeploymentName))
                         .run(Command.deploymentRename(oldDeploymentName, newDeploymentName, appName))
                         .end(done);
                 });

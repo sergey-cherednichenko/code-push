@@ -1,17 +1,23 @@
-const prefix: string = "[Error]  ";
+export module Error {
+    const PREFIX: string = "[Error]  ";
+    
+    // App
 
-export function getErrorAppNotFound(appName: string): string {
-    return prefix + "App \"" + appName + "\" does not exist.";
-}
+    export function appNotFound(appName: string): string {
+        return PREFIX + "App \"" + appName + "\" does not exist.";
+    }
 
-export function getErrorAppConflict(appName: string): string {
-    return prefix + "An app named '" + appName + "' already exists.";
-}
+    export function appConflict(appName: string): string {
+        return PREFIX + "An app named '" + appName + "' already exists.";
+    }
+    
+    // Deployment
 
-export function getErrorDeploymentNotFound(deploymentName: string): string {
-    return prefix + "Deployment \"" + deploymentName + "\" does not exist.";
-}
+    export function deploymentNotFound(deploymentName: string): string {
+        return PREFIX + "Deployment \"" + deploymentName + "\" does not exist.";
+    }
 
-export function getErrorDeploymentConflict(deploymentName: string): string {
-    return prefix + "A deployment named '" + deploymentName + "' already exists.";
+    export function deploymentConflict(deploymentName: string): string {
+        return PREFIX + "A deployment named '" + deploymentName + "' already exists.";
+    }
 }

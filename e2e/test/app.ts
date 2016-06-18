@@ -1,91 +1,19 @@
 import * as assert from "assert";
 import * as CodePush from "rest-definitions";
-import { Command, validateResponse } from "./utils/command";
-import { getErrorAppConflict, getErrorAppNotFound } from "./utils/error";
+import { Command } from "./utils/command";
+import { Error } from "./utils/error";
 import { makeRandomString } from "./utils/misc";
-import { getSuccessAppAdd, getSuccessAppRename, getSuccessAppRm } from "./utils/success";
+import { Success } from "./utils/success";
+import { Validate } from "./utils/validate";
 var nixt = require("nixt");
 var tryJSON = require("try-json");
-
-function validateApp(app: CodePush.App): void {
-    assert(app);
-
-    // An app must have a name.
-    assert(app.name);
-
-    var collaboratorMap: CodePush.CollaboratorMap = app.collaborators;
-    assert(collaboratorMap);
-
-    // An app must have exactly one owner and an infinite amount of collaborators in its collaborator list.
-    var hasOwner: boolean = false;
-    // An app must have exactly one collaborator marked as the current account.
-    var hasCurrentAccount: boolean = false;
-
-    // No two collaborators can share the same email.
-    var doesEmailExist: { [email: string]: boolean } = {};
-
-    for (var email in collaboratorMap) {
-        assert(!doesEmailExist[email]);
-        doesEmailExist[email] = true;
-
-        var collaboratorProperties: CodePush.CollaboratorProperties = collaboratorMap[email];
-
-        var isOwner: boolean = collaboratorProperties.permission === "Owner";
-        assert(!(isOwner && hasOwner));
-        hasOwner = isOwner;
-
-        var isCurrentAccount: boolean = collaboratorProperties.isCurrentAccount;
-        assert(!(isCurrentAccount && hasCurrentAccount));
-        hasCurrentAccount = isCurrentAccount;
-    }
-
-    assert(hasOwner);
-    assert(hasCurrentAccount);
-}
-
-function validateApps(apps: CodePush.App[]): void {
-    assert(apps);
-
-    // A user cannot have two apps of the same name.
-    var doesNameExist: { [name: string]: boolean } = {};
-
-    apps.forEach((app: CodePush.App) => {
-        assert(!doesNameExist[app.name]);
-        doesNameExist[app.name] = true;
-        
-        validateApp(app);
-    });
-}
-
-function validateAndCheckForApps(appTuplesToCheck: { [appName: string]: boolean }): (apps: CodePush.App[]) => void {
-    return validateResponse((apps: CodePush.App[]) => {
-        validateApps(apps);
-        
-        apps.forEach((app: CodePush.App) => {
-            assert(appTuplesToCheck[app.name] === true || appTuplesToCheck[app.name] === undefined);
-            if (appTuplesToCheck[app.name]) {
-                console.log("\tHERE");
-                delete appTuplesToCheck[app.name];
-            }
-        });
-        
-        // At this point, all app tuples remaining in the map should be ones that should not be in the list of apps.
-        for (var appName in appTuplesToCheck) {
-            assert(appTuplesToCheck[appName] === false);
-        }
-    });
-}
-
-function validateAndCheckForApp(appName: string, exists: boolean): (apps: CodePush.App[]) => void {
-    return validateAndCheckForApps({ [appName]: exists });
-}
 
 export function appTests() {
     
     describe("app ls", () => {
         it("succeeds", (done: any) => {
             nixt()
-                .expect(validateResponse(validateApps))
+                .expect(Validate.Apps())
                 .run(Command.appLs())
                 .end(done);
         });
@@ -97,21 +25,21 @@ export function appTests() {
             appName = makeRandomString();
             
             nixt()
-                .stdout(getSuccessAppAdd(appName))
+                .stdout(Success.appAdd(appName))
                 .run(Command.appAdd(appName))
                 .end(done);
         });
         
         it("succeeds", (done) => {
             nixt()
-                .expect(validateAndCheckForApp(appName, true))
+                .expect(Validate.Apps.checkFor(appName, true))
                 .run(Command.appLs())
                 .end(done);
         });
         
         it("fails if app conflict", (done) => {
             nixt()
-                .stderr(getErrorAppConflict(appName))
+                .stderr(Error.appConflict(appName))
                 .run(Command.appAdd(appName))
                 .end(done);
         });
@@ -123,19 +51,19 @@ export function appTests() {
             appName = makeRandomString();
             
             nixt()
-                .stdout(getSuccessAppAdd(appName))
+                .stdout(Success.appAdd(appName))
                 .run(Command.appAdd(appName))
                 .end(done);
         });
         
         it("succeeds with Y", (done: any) => {
             nixt()
-                .stdout(getSuccessAppRm(appName))
+                .stdout(Success.appRm(appName))
                 .run(Command.appRm(appName))
                 .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
                 .end(() => {
                     nixt()
-                        .expect(validateAndCheckForApp(appName, false))
+                        .expect(Validate.Apps.checkFor(appName, false))
                         .run(Command.appLs())
                         .end(done);
                 });
@@ -148,7 +76,7 @@ export function appTests() {
                 .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_REJECT)
                 .end(() => {
                     nixt()
-                        .expect(validateAndCheckForApp(appName, true))
+                        .expect(Validate.Apps.checkFor(appName, true))
                         .run(Command.appLs())
                         .end(done);
                 });
@@ -158,7 +86,7 @@ export function appTests() {
             var fakeAppName: string = "not_a_real_app";
             
             nixt()
-                .stderr(getErrorAppNotFound(fakeAppName))
+                .stderr(Error.appNotFound(fakeAppName))
                 .run(Command.appRm(fakeAppName))
                 .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
                 .end(done);
@@ -173,18 +101,18 @@ export function appTests() {
             newAppName = makeRandomString();
             
             nixt()
-                .stdout(getSuccessAppAdd(oldAppName))
+                .stdout(Success.appAdd(oldAppName))
                 .run(Command.appAdd(oldAppName))
                 .end(done);
         });
         
         it("succeeds", (done: any) => {
             nixt()
-                .stdout(getSuccessAppRename(oldAppName, newAppName))
+                .stdout(Success.appRename(oldAppName, newAppName))
                 .run(Command.appRename(oldAppName, newAppName))
                 .end(() => {
                     nixt()
-                        .expect(validateAndCheckForApps({ [oldAppName]: false, [newAppName]: true }))
+                        .expect(Validate.Apps.checkForMany({ [oldAppName]: false, [newAppName]: true }))
                         .run(Command.appLs())
                         .end(done);
                 });
@@ -194,7 +122,7 @@ export function appTests() {
             var fakeAppName: string = "not_a_real_app";
             
             nixt()
-                .stderr(getErrorAppNotFound(fakeAppName))
+                .stderr(Error.appNotFound(fakeAppName))
                 .run(Command.appRename(fakeAppName, newAppName))
                 .end(done);
         });
@@ -205,7 +133,7 @@ export function appTests() {
                 .run(Command.appAdd(newAppName))
                 .end(() => {
                     nixt()
-                        .stderr(getErrorAppConflict(newAppName))
+                        .stderr(Error.appConflict(newAppName))
                         .run(Command.appRename(oldAppName, newAppName))
                         .end(done);
                 });

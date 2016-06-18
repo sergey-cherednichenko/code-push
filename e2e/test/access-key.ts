@@ -1,6 +1,10 @@
 import * as assert from "assert";
 import * as CodePush from "rest-definitions";
 import { Command } from "./utils/command";
+import { Error } from "./utils/error";
+import { makeRandomString } from "./utils/misc";
+import { Success } from "./utils/success";
+import { Validate } from "./utils/validate";
 var nixt = require("nixt");
 var tryJSON = require("try-json");
 

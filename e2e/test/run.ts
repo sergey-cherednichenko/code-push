@@ -4,6 +4,7 @@ import { accessKeyTests } from "./access-key";
 import { appTests } from "./app";
 import { deploymentTests } from "./deployment";
 import { collaboratorTests } from "./collaborator";
+import { releaseTests } from "./release";
 
 var nixt = require("nixt");
 var tryJSON = require("try-json");
@@ -25,6 +26,7 @@ describe("CodePush", () => {
 
     // describe("Access key commands", () => accessKeyTests());
     describe("App commands", () => appTests());
-    // describe("Collaborator commands", () => collaboratorTests());
+    describe("Collaborator commands", () => collaboratorTests());
     describe("Deployment commands", () => deploymentTests());
+    // describe("Release commands", () => releaseTests());
 });

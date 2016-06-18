@@ -4,17 +4,10 @@ import { Command } from "./utils/command";
 import { Error } from "./utils/error";
 import { makeRandomString } from "./utils/misc";
 import { Success } from "./utils/success";
+import { Validate } from "./utils/validate";
 var nixt = require("nixt");
 var tryJSON = require("try-json");
 
-export function collaboratorTests() {
-    var appName: string = makeRandomString();
-    before((done) => {
-        nixt()
-            .stdout(Success.appAdd(appName))
-            .run(Command.appAdd(appName))
-            .end(done);
-    });
-    
+export function releaseTests() {
     
 }

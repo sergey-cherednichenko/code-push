@@ -1,14 +1,3 @@
-import * as assert from "assert";
-var tryJSON = require("try-json");
-
-export function validateResponse(validateResponseFunction: (object: any) => void): (result: any) => void {
-    return (result: any) => {
-        assert(result);
-        assert(result.stdout);
-        validateResponseFunction(tryJSON(result.stdout));
-    };
-}
-
 export module Command {
     
     function getCommand(args: string) {
