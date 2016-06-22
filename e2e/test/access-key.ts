@@ -14,11 +14,11 @@ function validateAccessKey(result: any): void {
 }
 
 export function accessKeyTests() {
-    before((done) =>  {
+    before((done: MochaDone) =>  {
         done();
     });
 
-    after((done) =>  {
+    after((done: MochaDone) =>  {
         done();
     });
 

@@ -10,22 +10,30 @@ var tryJSON = require("try-json");
 
 export function deploymentTests() {
     var appName: string = makeRandomString();
-    before((done) => {
+    before((done: MochaDone) => {
         nixt()
             .stdout(Success.appAdd(appName))
             .run(Command.appAdd(appName))
             .end(done);
     });
     
+    after((done: MochaDone) => {
+        nixt()
+            .stdout(Success.appRm(appName))
+            .run(Command.appRm(appName))
+            .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
+            .end(done);
+    });
+    
     describe("deployment ls", () => {
-        it("succeeds", (done: any) => {
+        it("succeeds", (done: MochaDone) => {
             nixt()
                 .expect(Validate.Deployments())
                 .run(Command.deploymentLs(appName))
                 .end(done);
         });
         
-        it("fails if app not found", (done: any) => {
+        it("fails if app not found", (done: MochaDone) => {
             var fakeAppName: string = "not_a_real_app";
             
             nixt()
@@ -33,96 +41,103 @@ export function deploymentTests() {
                 .run(Command.deploymentLs(fakeAppName))
                 .end(done);
         });
+        
+        it("fails with invalid format", (done: MochaDone) => {
+            nixt()
+                .stderr(Error.invalidFormat())
+                .run(Command.invalidFormat(Command.deploymentLs(appName)))
+                .end(done);
+        });
     });
     
     describe("deployment add", () => {
         var deploymentName: string;
-        beforeEach((done) => {
+        beforeEach((done: MochaDone) => {
             deploymentName = makeRandomString();
             
             nixt()
-                .stdout(Success.deploymentAdd(deploymentName, appName))
-                .run(Command.deploymentAdd(deploymentName, appName))
+                .stdout(Success.deploymentAdd(appName, deploymentName))
+                .run(Command.deploymentAdd(appName, deploymentName))
                 .end(done);
         });
         
-        it("succeeds", (done) => {
+        it("succeeds", (done: MochaDone) => {
             nixt()
-                .expect(Validate.Deployments.checkFor(deploymentName, true))
+                .expect(Validate.Deployments.checkFor(deploymentName, Validate.existsInContainer))
                 .run(Command.deploymentLs(appName))
                 .end(done);
         });
         
-        it("fails if deployment conflict", (done) => {
+        it("fails if deployment conflict", (done: MochaDone) => {
             nixt()
                 .stderr(Error.deploymentConflict(deploymentName))
-                .run(Command.deploymentAdd(deploymentName, appName))
+                .run(Command.deploymentAdd(appName, deploymentName))
                 .end(done);
         });
         
-        it("fails if app not found", (done: any) => {
+        it("fails if app not found", (done: MochaDone) => {
             var fakeAppName: string = "not_a_real_app";
             
             nixt()
                 .stderr(Error.appNotFound(fakeAppName))
-                .run(Command.deploymentAdd(deploymentName, fakeAppName))
+                .run(Command.deploymentAdd(fakeAppName, deploymentName))
                 .end(done);
         });
     });
     
     describe("deployment rm", () => {
         var deploymentName: string;
-        beforeEach((done) => {
+        beforeEach((done: MochaDone) => {
             deploymentName = makeRandomString();
             
             nixt()
-                .stdout(Success.deploymentAdd(deploymentName, appName))
-                .run(Command.deploymentAdd(deploymentName, appName))
+                .stdout(Success.deploymentAdd(appName, deploymentName))
+                .run(Command.deploymentAdd(appName, deploymentName))
                 .end(done);
         });
         
-        it("succeeds with Y", (done: any) => {
+        it("succeeds with Y", (done: MochaDone) => {
             nixt()
-                .stdout(Success.deploymentRm(deploymentName, appName))
-                .run(Command.deploymentRm(deploymentName, appName))
+                .stdout(Success.deploymentRm(appName, deploymentName))
+                .run(Command.deploymentRm(appName, deploymentName))
                 .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
                 .end(() => {
                     nixt()
-                        .expect(Validate.Deployments.checkFor(deploymentName, false))
+                        .expect(Validate.Deployments.checkFor(deploymentName, Validate.doesNotExistInContainer))
                         .run(Command.deploymentLs(appName))
                         .end(done);
                 });
         });
         
-        it("fails with n", (done: any) => {
+        it("fails with n", (done: MochaDone) => {
             nixt()
                 .stdout("Deployment removal cancelled.")
-                .run(Command.deploymentRm(deploymentName, appName))
+                .run(Command.deploymentRm(appName, deploymentName))
                 .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_REJECT)
                 .end(() => {
                     nixt()
-                        .expect(Validate.Deployments.checkFor(deploymentName, true))
+                        .expect(Validate.Deployments.checkFor(deploymentName, Validate.existsInContainer))
                         .run(Command.deploymentLs(appName))
                         .end(done);
                 });
         });
         
-        it("fails if app not found", (done: any) => {
+        it("fails if app not found", (done: MochaDone) => {
             var fakeAppName: string = "not_a_real_app";
             
             nixt()
                 .stderr(Error.appNotFound(fakeAppName))
-                .run(Command.deploymentRm(deploymentName, fakeAppName))
+                .run(Command.deploymentRm(fakeAppName, deploymentName))
                 .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
                 .end(done);
         });
         
-        it("fails if deployment not found", (done: any) => {
+        it("fails if deployment not found", (done: MochaDone) => {
             var fakeDeploymentName: string = "not_a_real_deployment";
             
             nixt()
                 .stderr(Error.deploymentNotFound(fakeDeploymentName))
-                .run(Command.deploymentRm(fakeDeploymentName, appName))
+                .run(Command.deploymentRm(appName, fakeDeploymentName))
                 .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
                 .end(done);
         });
@@ -131,58 +146,57 @@ export function deploymentTests() {
     describe("deployment rename", () => {
         var oldDeploymentName: string;
         var newDeploymentName: string;
-        beforeEach((done) => {
+        beforeEach((done: MochaDone) => {
             oldDeploymentName = makeRandomString();
             newDeploymentName = makeRandomString();
             
             nixt()
-                .stdout(Success.deploymentAdd(oldDeploymentName, appName))
-                .run(Command.deploymentAdd(oldDeploymentName, appName))
+                .stdout(Success.deploymentAdd(appName, oldDeploymentName))
+                .run(Command.deploymentAdd(appName, oldDeploymentName))
                 .end(done);
         });
         
-        it("succeeds", (done: any) => {
+        it("succeeds", (done: MochaDone) => {
             nixt()
-                .stdout(Success.deploymentRename(oldDeploymentName, newDeploymentName, appName))
-                .run(Command.deploymentRename(oldDeploymentName, newDeploymentName, appName))
+                .stdout(Success.deploymentRename(appName, oldDeploymentName, newDeploymentName))
+                .run(Command.deploymentRename(appName, oldDeploymentName, newDeploymentName))
                 .end(() => {
                     nixt()
-                        .expect(Validate.Deployments.checkForMany({ [oldDeploymentName]: false, [newDeploymentName]: true }))
+                        .expect(Validate.Deployments.checkForMany({ [oldDeploymentName]: Validate.doesNotExistInContainer, [newDeploymentName]: Validate.existsInContainer }))
                         .run(Command.deploymentLs(appName))
                         .end(done);
                 });
         });
         
-        it("fails if app not found", (done: any) => {
+        it("fails if app not found", (done: MochaDone) => {
             var fakeAppName: string = "not_a_real_app";
             
             nixt()
                 .stderr(Error.appNotFound(fakeAppName))
-                .run(Command.deploymentRename(oldDeploymentName, newDeploymentName, fakeAppName))
+                .run(Command.deploymentRename(fakeAppName, oldDeploymentName, newDeploymentName))
                 .end(done);
         });
         
-        it("fails if deployment not found", (done: any) => {
+        it("fails if deployment not found", (done: MochaDone) => {
             var fakeDeploymentName: string = "not_a_real_deployment";
             
             nixt()
                 .stderr(Error.deploymentNotFound(fakeDeploymentName))
-                .run(Command.deploymentRename(fakeDeploymentName, newDeploymentName, appName))
+                .run(Command.deploymentRename(appName, fakeDeploymentName, newDeploymentName))
                 .end(done);
         });
         
-        it("fails if deployment conflict", (done: any) => {
+        it("fails if deployment conflict", (done: MochaDone) => {
             nixt()
-                .stdout(Success.deploymentAdd(newDeploymentName, appName))
-                .run(Command.deploymentAdd(newDeploymentName, appName))
+                .stdout(Success.deploymentAdd(appName, newDeploymentName))
+                .run(Command.deploymentAdd(appName, newDeploymentName))
                 .end(() => {
                     nixt()
                         .stderr(Error.deploymentConflict(newDeploymentName))
-                        .run(Command.deploymentRename(oldDeploymentName, newDeploymentName, appName))
+                        .run(Command.deploymentRename(appName, oldDeploymentName, newDeploymentName))
                         .end(done);
                 });
         });
     });
     
-    // TODO: clear, history
 }

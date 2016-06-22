@@ -16,16 +16,34 @@ export module Success {
 
     // Deployment
 
-    export function deploymentAdd(deploymentName: string, appName: string): RegExp {
+    export function deploymentAdd(appName: string, deploymentName: string): RegExp {
         return new RegExp("Successfully added the \"" + deploymentName + "\" deployment with key \".*\" to the \"" + appName + "\" app[.]");
     }
 
-    export function deploymentRename(oldDeploymentName: string, newDeploymentName: string, appName: string): RegExp {
+    export function deploymentRename(appName: string, oldDeploymentName: string, newDeploymentName: string): RegExp {
         return new RegExp("Successfully renamed the \"" + oldDeploymentName + "\" deployment to \"" + newDeploymentName + "\" for the \"" + appName + "\" app[.]")
     }
 
-    export function deploymentRm(deploymentName: string, appName: string): RegExp {
+    export function deploymentRm(appName: string, deploymentName: string): RegExp {
         return new RegExp("Successfully removed the \"" + deploymentName + "\" deployment from the \"" + appName + "\" app[.]");
+    }
+    
+    // Release
+    
+    export function releaseFile(fileName: string, appName: string, deploymentName: string): RegExp {
+        fileName = fileName.replace(/\\/g, "/");
+        return new RegExp("Successfully released an update containing the \"" + fileName + "\" file to the \"" + deploymentName + "\" deployment of the \"" + appName + "\" app.")
+    }
+    
+    export function releaseDirectory(directoryName: string, appName: string, deploymentName: string): RegExp {
+        directoryName = directoryName.replace(/\\/g, "/");
+        return new RegExp("Successfully released an update containing the \"" + directoryName + "\" directory to the \"" + deploymentName + "\" deployment of the \"" + appName + "\" app.")
+    }
+    
+    // Patch
+    
+    export function patch(appName: string, deploymentName: string, label?: string): RegExp {
+        return new RegExp("Successfully updated the " + (label ? label : "latest") + " release of " + appName + " app's " + deploymentName + " deployment.");
     }
 
 }

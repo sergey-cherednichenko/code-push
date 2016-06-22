@@ -9,7 +9,7 @@ var tryJSON = require("try-json");
 
 export function collaboratorTests() {
     var appName: string = makeRandomString();
-    before((done) => {
+    before((done: MochaDone) => {
         nixt()
             .stdout(Success.appAdd(appName))
             .run(Command.appAdd(appName))

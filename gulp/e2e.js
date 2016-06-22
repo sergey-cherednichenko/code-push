@@ -37,3 +37,7 @@ gulp.task("codepush-install", function(done) {
 gulp.task("e2e", function(done) {
     runSequence("codepush-install", "test-e2e", done);
 });
+
+gulp.task("e2e-fast", function(done) {
+    runSequence("test-e2e", done);
+});

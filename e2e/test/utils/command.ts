@@ -32,16 +32,72 @@ export module Command {
         return getCommandJsonFormat("deployment ls " + appName);
     }
 
-    export function deploymentAdd(deploymentName: string, appName: string): string {
+    export function deploymentAdd(appName: string, deploymentName: string): string {
         return getCommand("deployment add " + appName + " " + deploymentName);
     }
 
-    export function deploymentRename(oldDeploymentName: string, newDeploymentName: string, appName: string): string {
+    export function deploymentRename(appName: string, oldDeploymentName: string, newDeploymentName: string): string {
         return getCommand("deployment rename " + appName + " " + oldDeploymentName + " " + newDeploymentName);
     }
 
-    export function deploymentRm(deploymentName: string, appName: string): string {
+    export function deploymentRm(appName: string, deploymentName: string): string {
         return getCommand("deployment rm " + appName + " " + deploymentName);
+    }
+    
+    export function deploymentH(appName: string, deploymentName: string): string {
+        return getCommandJsonFormat("deployment h " + appName + " " + deploymentName);
+    }
+    
+    export function deploymentClear(appName: string, deploymentName: string): string {
+        return getCommand("deployment clear " + appName + " " + deploymentName);
+    }
+    
+    // Release
+    
+    export interface PackageOptions {
+        description?: string;
+        disabled?: boolean;
+        mandatory?: boolean;
+        rollout?: number;
+    }
+    
+    export interface ReleaseOptions extends PackageOptions {
+        deploymentName?: string;
+    }
+    
+    export function release(appName: string, updateContentsPath: string, targetBinaryVersion: string, options?: ReleaseOptions): string {
+        var optionsToParse: any = options || {};
+        updateContentsPath = updateContentsPath.replace(/\\/g, "/");
+        var args: string = "";
+        !!options && (args = Object.keys(options).map((key: string) => { return "--" + key + " " + optionsToParse[key]; }).join(" "));
+        return getCommand("release " + [appName, updateContentsPath, targetBinaryVersion, args].join(" "));
+    }
+    
+    // Patch
+    
+    export interface PatchOptions extends PackageOptions {
+        label?: string;
+        targetBinaryVersion?: string;
+    }
+    
+    export function patch(appName: string, deploymentName: string, options?: PatchOptions): string {
+        var optionsToParse: any = options || {};
+        var args: string = "";
+        !!options && (args = Object.keys(options).map((key: string) => { return "--" + key + " " + optionsToParse[key]; }).join(" "));
+        return getCommand("patch " + [appName, deploymentName, args].join(" "));
+    }
+    
+    // Promote
+    
+    export interface PromoteOptions extends PackageOptions {
+        targetBinaryVersion?: string;
+    }
+    
+    // Misc
+    
+    export const invalidFormatName: string = "not_a_real_format";
+    export function invalidFormat(command: string): string {
+        return command.replace(/--format \S+/, "") + "--format " + invalidFormatName;
     }
     
     // Prompt
