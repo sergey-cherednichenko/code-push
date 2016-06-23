@@ -18,7 +18,6 @@
     "gulp-typescript": "^2.7.8",
     "gulp-util": "^3.0.6",
     "merge2": "^0.3.6",
-    "e2e-tests": "file:./e2e/bin",
     "node-libs-browser": "^0.5.2",
     "node-rsa": "^0.2.24",
     "require-all": "^1.1.0",
