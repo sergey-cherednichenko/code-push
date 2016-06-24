@@ -731,7 +731,7 @@ export function packageTests() {
                     });
             });
             
-            it.only("can increase to full", (done: MochaDone) => {
+            it("can increase to full", (done: MochaDone) => {
                 nixt()
                     .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
                     .run(Command.release(appName, release1, binaryVersion1, { rollout: rolloutPartial }))
