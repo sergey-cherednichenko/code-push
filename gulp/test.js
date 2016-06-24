@@ -1,5 +1,6 @@
 "use strict";
 
+var del = require("del");
 var gulp = require("gulp");
 var plugins = require("gulp-load-plugins")();
 
@@ -27,6 +28,14 @@ function sourcePathFromName(name) {
 }
 
 function runTests(sources, tests, done) {
+    for (var i = 0; i < process.argv.length; i++) {
+        if (process.argv[i] === "--report") {
+            mochaConfig.reporter = "mocha-junit-reporter";
+            // Delete previous test result file so TFS doesn't read the old file if the tests exit before saving
+            del("./test-results.xml");
+        }
+    }
+    
     require("dotenv").config({ path: ".test.env", silent: true });
     gulp.src(sources)
         .pipe(plugins.istanbul({includeUntested: true}))

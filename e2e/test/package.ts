@@ -1141,7 +1141,7 @@ export function packageTests() {
         });
     });
     
-    describe.only("rollback", () => {
+    describe("rollback", () => {
         
         it("fails when deployment does not have a package", (done: MochaDone) => {
             nixt()
