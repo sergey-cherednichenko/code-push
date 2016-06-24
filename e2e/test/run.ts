@@ -28,8 +28,8 @@ describe("CodePush", function() {
     });
 
     // describe("Access key commands", () => accessKeyTests());
-    // describe("App commands", () => appTests());
+    describe("App commands", () => appTests());
     // describe("Collaborator commands", () => collaboratorTests());
-    // describe("Deployment commands", () => deploymentTests());
+    describe("Deployment commands", () => deploymentTests());
     describe("Package commands", () => packageTests());
 });
