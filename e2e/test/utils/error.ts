@@ -56,12 +56,36 @@ export module Error {
         return PREFIX + "Release not found for given label.";
     }
     
-    export function patchRolloutAgainstFull(): string {
-        return PREFIX + "Cannot update rollout value for a completed rollout release.";
+    // Promote
+    
+    export function promoteUsage(): RegExp {
+        return new RegExp("Usage: code-push promote.*");
     }
     
-    export function patchRolloutDecreasing(current: number): string {
-        return PREFIX + "Rollout value must be greater than \"" + current + "\", the existing value.";
+    export function promoteNoReleases(): string {
+        return PREFIX + "Cannot promote from a deployment with no enabled releases.";
+    }
+    
+    // Rollback
+    
+    export function rollbackCancelled(): string {
+        return PREFIX + "Rollback cancelled";
+    }
+    
+    export function rollbackNoReleases(): string {
+        return PREFIX + "Cannot perform rollback because there are no releases on this deployment.";
+    }
+    
+    export function rollbackLabelNotFound(label: string): string {
+        return PREFIX + "Cannot perform rollback because the target release (" + label + ") could not be found in the deployment history.";
+    }
+    
+    export function rollbackNoPriorReleases(): string {
+        return PREFIX + "Cannot perform rollback because there are no prior releases to rollback to.";
+    }
+    
+    export function rollbackAlreadyLatest(label: string): string {
+        return PREFIX + "Cannot perform rollback because the target release (" + label + ") is already the latest release.";
     }
     
     // Misc
@@ -84,6 +108,14 @@ export module Error {
     
     export function deploymentNoReleases(): string {
         return PREFIX + "Deployment has no releases.";
+    }
+    
+    export function rolloutAgainstFull(): string {
+        return PREFIX + "Cannot update rollout value for a completed rollout release.";
+    }
+    
+    export function rolloutDecreasing(current: number): string {
+        return PREFIX + "Rollout value must be greater than \"" + current + "\", the existing value.";
     }
     
 }

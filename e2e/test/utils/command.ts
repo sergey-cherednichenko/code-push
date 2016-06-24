@@ -66,10 +66,8 @@ export module Command {
     }
     
     export function release(appName: string, updateContentsPath: string, targetBinaryVersion: string, options?: ReleaseOptions): string {
-        var optionsToParse: any = options || {};
         updateContentsPath = updateContentsPath.replace(/\\/g, "/");
-        var args: string = "";
-        !!options && (args = Object.keys(options).map((key: string) => { return "--" + key + " " + optionsToParse[key]; }).join(" "));
+        var args = mergeOptionsIntoList(options);
         return getCommand("release " + [appName, updateContentsPath, targetBinaryVersion, args].join(" "));
     }
     
@@ -81,9 +79,7 @@ export module Command {
     }
     
     export function patch(appName: string, deploymentName: string, options?: PatchOptions): string {
-        var optionsToParse: any = options || {};
-        var args: string = "";
-        !!options && (args = Object.keys(options).map((key: string) => { return "--" + key + " " + optionsToParse[key]; }).join(" "));
+        var args = mergeOptionsIntoList(options);
         return getCommand("patch " + [appName, deploymentName, args].join(" "));
     }
     
@@ -91,6 +87,22 @@ export module Command {
     
     export interface PromoteOptions extends PackageOptions {
         targetBinaryVersion?: string;
+    }
+    
+    export function promote(appName: string, oldDeploymentName: string, newDeploymentName: string, options?: PromoteOptions): string {
+        var args = mergeOptionsIntoList(options);
+        return getCommand("promote " + [appName, oldDeploymentName, newDeploymentName, args].join(" "));
+    }
+    
+    // Rollback
+    
+    export interface RollbackOptions {
+        targetRelease?: string;
+    }
+    
+    export function rollback(appName: string, deploymentName: string, options?: RollbackOptions): string {
+        var args = mergeOptionsIntoList(options);
+        return getCommand("rollback " + [appName, deploymentName, args].join(" "));
     }
     
     // Misc
@@ -108,4 +120,10 @@ export module Command {
     export const RESPONSE_ACCEPT: string = "Y\n";
     
     export const RESPONSE_REJECT: string = "n\n";
+    
+    // Utility
+    
+    function mergeOptionsIntoList(options: any) {
+        return !!options ? Object.keys(options).map((key: string) => { return "--" + key + " " + options[key]; }).join(" ") : "";
+    }
 }

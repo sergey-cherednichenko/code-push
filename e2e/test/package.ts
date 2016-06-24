@@ -28,6 +28,7 @@ const release2: string = path.join(inputFolder, "release2.js");
 const release3: string = path.join(inputFolder, "release3.js");
 
 export function packageTests() {
+    /** Resets before every test to clear all the deployments. */
     var appName: string;
     
     const deploymentNameStaging: string = "Staging";
@@ -472,7 +473,9 @@ export function packageTests() {
     });
     
     describe("patch", () => {
+        
         describe("label", () => {
+            
             it("fails when deployment does not have a package", (done: MochaDone) => {
                 var newDescription: string = "another_description";
                 
@@ -677,7 +680,7 @@ export function packageTests() {
                     .run(Command.release(appName, release1, binaryVersion1))
                     .end(() => {
                         nixt()
-                            .stderr(Error.patchRolloutAgainstFull())
+                            .stderr(Error.rolloutAgainstFull())
                             .run(Command.patch(appName, deploymentNameStaging, { rollout: rolloutPartial }))
                             .end(done);
                     });
@@ -711,7 +714,7 @@ export function packageTests() {
                     .run(Command.release(appName, release1, binaryVersion1, { rollout: rolloutPartial }))
                     .end(() => {
                         nixt()
-                            .stderr(Error.patchRolloutDecreasing(rolloutPartial))
+                            .stderr(Error.rolloutDecreasing(rolloutPartial))
                             .run(Command.patch(appName, deploymentNameStaging, { rollout: rolloutPartial - 1 }))
                             .end(done);
                     });
@@ -778,6 +781,536 @@ export function packageTests() {
                 .stderr(Error.patchNoneSpecified())
                 .run(Command.patch(appName, deploymentNameStaging, { label: "v1" }))
                 .end(done);
+        });
+    });
+    
+    describe("promote", () => {
+        
+        describe("accepts", () => {
+            beforeEach((done: MochaDone) => {
+                nixt()
+                    .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                    .run(Command.release(appName, release1, binaryVersion1))
+                    .end(done);
+            });
+            
+            it("promoting to new deployment", (done: MochaDone) => {
+                var newDeploymentName: string = makeRandomString();
+                nixt()
+                    .stdout(Success.deploymentAdd(appName, newDeploymentName))
+                    .run(Command.deploymentAdd(appName, newDeploymentName))
+                    .end(() => {
+                        nixt()
+                            .stdout(Success.promote(appName, deploymentNameStaging, newDeploymentName))
+                            .run(Command.promote(appName, deploymentNameStaging, newDeploymentName))
+                            .end(verifyDeploymentPackageMatches(done, newDeploymentName, { appVersion: binaryVersion1, label: "v1", rollout: rolloutFull }, releaseMethodPromote));
+                    });
+            });
+            
+            it("promoting to a deployment with another package on the same binary version", (done: MochaDone) => {
+                nixt()
+                    .stdout(Success.releaseFile(release2, appName, deploymentNameProduction))
+                    .run(Command.release(appName, release2, binaryVersion1, { deploymentName: deploymentNameProduction }))
+                    .end(() => {
+                        nixt()
+                            .stdout(Success.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                            .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                            .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, { appVersion: binaryVersion1, label: "v2", rollout: rolloutFull }, releaseMethodPromote))
+                    });
+            });
+            
+            it("releases to a deployment with another package on a different binary version", (done: MochaDone) => {
+                nixt()
+                    .stdout(Success.releaseFile(release2, appName, deploymentNameProduction))
+                    .run(Command.release(appName, release2, binaryVersion2, { deploymentName: deploymentNameProduction }))
+                    .end(() => {
+                        nixt()
+                            .stdout(Success.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                            .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                            .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, { appVersion: binaryVersion1, label: "v2", rollout: rolloutFull }, releaseMethodPromote))
+                    });
+            });
+            
+            it("releases to a deployment with an identical package on a different binary version", (done: MochaDone) => {
+                nixt()
+                    .stdout(Success.releaseFile(release1, appName, deploymentNameProduction))
+                    .run(Command.release(appName, release1, binaryVersion2, { deploymentName: deploymentNameProduction }))
+                    .end(() => {
+                        nixt()
+                            .stdout(Success.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                            .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                            .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, { appVersion: binaryVersion1, label: "v2", rollout: rolloutFull }, releaseMethodPromote))
+                    });
+            });
+            
+            it("specifying description, disabled, and mandatory", (done: MochaDone) => {
+                var description: string = "this_is_a_description";
+                var isDisabled: boolean = true;
+                var isMandatory: boolean = true;
+                
+                nixt()
+                    .stdout(Success.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                    .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { description: description, disabled: isDisabled, mandatory: isMandatory }))
+                    .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, { appVersion: binaryVersion1, label: "v1", rollout: rolloutFull, description: description, isDisabled: isDisabled, isMandatory: isMandatory }, releaseMethodPromote))
+            });
+            
+            describe("rollout", () => {
+                it("against deployment with no packages", (done: MochaDone) => {
+                    nixt()
+                        .stdout(Success.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                        .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { rollout: rolloutPartial }))
+                        .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, { appVersion: binaryVersion1, label: "v1", rollout: rolloutPartial }, releaseMethodPromote));
+                });
+                
+                it("against deployment with a full rollout on same binary version", (done: MochaDone) => {
+                    nixt()
+                        .stdout(Success.releaseFile(release2, appName, deploymentNameProduction))
+                        .run(Command.release(appName, release2, binaryVersion1, { deploymentName: deploymentNameProduction }))
+                        .end(() => {
+                            nixt()
+                                .stdout(Success.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                                .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { rollout: rolloutPartial }))
+                                .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, { appVersion: binaryVersion1, label: "v2", rollout: rolloutPartial }, releaseMethodPromote));
+                        });
+                });
+                
+                it("against deployment with a full rollout on a different binary version", (done: MochaDone) => {
+                    nixt()
+                        .stdout(Success.releaseFile(release2, appName, deploymentNameProduction))
+                        .run(Command.release(appName, release2, binaryVersion2, { deploymentName: deploymentNameProduction }))
+                        .end(() => {
+                            nixt()
+                                .stdout(Success.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                                .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { rollout: rolloutPartial }))
+                                .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, { appVersion: binaryVersion1, label: "v2", rollout: rolloutPartial }, releaseMethodPromote));
+                        });
+                });
+                
+                it("full against a deployment with a disabled partial rollout", (done: MochaDone) => {
+                    nixt()
+                        .stdout(Success.releaseFile(release2, appName, deploymentNameProduction))
+                        .run(Command.release(appName, release2, binaryVersion1, { deploymentName: deploymentNameProduction, rollout: rolloutPartial, disabled: true }))
+                        .end(() => {
+                            nixt()
+                                .stdout(Success.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                                .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                                .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, { appVersion: binaryVersion1, label: "v2", rollout: rolloutFull }, releaseMethodPromote));
+                        });
+                });
+                
+                it("partial against a deployment with a disabled partial rollout", (done: MochaDone) => {
+                    nixt()
+                        .stdout(Success.releaseFile(release2, appName, deploymentNameProduction))
+                        .run(Command.release(appName, release2, binaryVersion1, { deploymentName: deploymentNameProduction, rollout: rolloutPartial, disabled: true }))
+                        .end(() => {
+                            nixt()
+                                .stdout(Success.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                                .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { rollout: rolloutPartial }))
+                                .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, { appVersion: binaryVersion1, label: "v2", rollout: rolloutPartial }, releaseMethodPromote));
+                        });
+                });
+            });
+        });
+        
+        describe("rejects", () => {
+            beforeEach((done: MochaDone) => {
+                nixt()
+                    .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                    .run(Command.release(appName, release1, binaryVersion1, { rollout: rolloutPartial}))
+                    .end(done);
+            });
+            
+            describe("when a partial rollout is the last package", () => {
+                it("of the same binary version", (done: MochaDone) => {
+                    nixt()
+                        .stdout(Success.releaseFile(release1, appName, deploymentNameProduction))
+                        .run(Command.release(appName, release1, binaryVersion1, { rollout: rolloutPartial}))
+                        .end(() => {
+                            nixt()
+                                .stderr(Error.releaseRollbackInProgress())
+                                .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { rollout: rolloutPartial }))
+                                .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, { appVersion: binaryVersion1, label: "v1", rollout: rolloutPartial }, releaseMethodPromote));
+                        });
+                });
+                
+                it("of a different binary version", (done: MochaDone) => {
+                    nixt()
+                        .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                        .run(Command.release(appName, release1, binaryVersion1, { rollout: rolloutPartial}))
+                        .end(() => {
+                            nixt()
+                                .stderr(Error.releaseRollbackInProgress())
+                                .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { rollout: rolloutPartial }))
+                                .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, { appVersion: binaryVersion1, label: "v1", rollout: rolloutPartial }, releaseMethodPromote));
+                        });
+                });
+            });
+        });
+        
+        describe("label", () => {
+            it("fails when deployment does not have a package", (done: MochaDone) => {
+                var newDescription: string = "another_description";
+                
+                nixt()
+                    .stderr(Error.promoteNoReleases())
+                    .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { description: newDescription }))
+                    .end(done);
+            });
+            
+            describe("defaults to latest package", () => {
+                it("when there is only one package", (done: MochaDone) => {
+                    var newDescription: string = "another_description";
+                    
+                    nixt()
+                        .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                        .run(Command.release(appName, release1, binaryVersion1))
+                        .end(() => {
+                            nixt()
+                                .stdout(Success.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                                .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { description: newDescription }))
+                                .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, { appVersion: binaryVersion1, label: "v1", rollout: rolloutFull, description: newDescription }));
+                        });
+                });
+                
+                it("when there are multiple packages", (done: MochaDone) => {
+                    var newDescription: string = "another_description";
+                    
+                    nixt()
+                        .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                        .run(Command.release(appName, release1, binaryVersion1))
+                        .end(() => {
+                            nixt()
+                                .stdout(Success.releaseFile(release2, appName, deploymentNameStaging))
+                                .run(Command.release(appName, release2, binaryVersion1))
+                                .end(() => {
+                                    nixt()
+                                        .stdout(Success.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                                        .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { description: newDescription }))
+                                        .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, { appVersion: binaryVersion1, label: "v1", rollout: rolloutFull, description: newDescription }));
+                                });
+                        });
+                });
+        
+                it("regardless of binary version", (done: MochaDone) => {
+                    var newDescription: string = "another_description";
+                    
+                    nixt()
+                        .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                        .run(Command.release(appName, release1, binaryVersion3))
+                        .end(() => {
+                            nixt()
+                                .stdout(Success.releaseFile(release2, appName, deploymentNameStaging))
+                                .run(Command.release(appName, release2, binaryVersion1))
+                                .end(() => {
+                                    nixt()
+                                        .stdout(Success.releaseFile(release3, appName, deploymentNameStaging))
+                                        .run(Command.release(appName, release3, binaryVersion2))
+                                        .end(() => {
+                                            nixt()
+                                                .stdout(Success.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                                                .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { description: newDescription }))
+                                                .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, { appVersion: binaryVersion2, label: "v1", rollout: rolloutFull, description: newDescription }));
+                                        });
+                                });
+                        });
+                });
+            });
+        });
+        
+        describe("disabled", () => {
+            var packageInfo: CodePush.PackageInfo;
+            
+            beforeEach((done: MochaDone) => {
+                packageInfo = { appVersion: binaryVersion1, label: "v1", rollout: rolloutFull };
+                
+                nixt()
+                    .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                    .run(Command.release(appName, release1, binaryVersion1))
+                    .end(done);
+            });
+            
+            it("succeeds", (done: MochaDone) => {
+                packageInfo.isDisabled = true;
+                
+                nixt()
+                    .stdout(Success.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                    .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { disabled: true }))
+                    .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, packageInfo));
+            });
+            
+            it("fails on invalid boolean", (done: MochaDone) => {
+                nixt()
+                    .stderr(Error.promoteUsage())
+                    .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, <any>{ disabled: "not_a_boolean" }))
+                    .end(verifyDeploymentNoPackage(done, deploymentNameProduction));
+            });
+        });
+        
+        describe("mandatory", () => {
+            var packageInfo: CodePush.PackageInfo;
+            
+            beforeEach((done: MochaDone) => {
+                packageInfo = { appVersion: binaryVersion1, label: "v1", rollout: rolloutFull };
+                
+                nixt()
+                    .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                    .run(Command.release(appName, release1, binaryVersion1))
+                    .end(done);
+            });
+            
+            it("succeeds", (done: MochaDone) => {
+                packageInfo.isMandatory = true;
+                
+                nixt()
+                    .stdout(Success.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                    .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { mandatory: true }))
+                    .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, packageInfo));
+            });
+            
+            it("fails on invalid boolean", (done: MochaDone) => {
+                nixt()
+                    .stderr(Error.promoteUsage())
+                    .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, <any>{ mandatory: "not_a_boolean" }))
+                    .end(verifyDeploymentNoPackage(done, deploymentNameProduction));
+            });
+        });
+        
+        describe("rollout", () => {
+            it("succeeds when promoting full rollout to partial rollout", (done: MochaDone) => {
+                nixt()
+                    .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                    .run(Command.release(appName, release1, binaryVersion1))
+                    .end(() => {
+                        nixt()
+                            .stdout(Success.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                            .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { rollout: rolloutPartial }))
+                            .end(done);
+                    });
+            });
+            
+            it("fails on invalid input", (done: MochaDone) => {
+                nixt()
+                    .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                    .run(Command.release(appName, release1, binaryVersion1, { rollout: rolloutPartial }))
+                    .end(() => {
+                        nixt()
+                            .stderr(Error.promoteUsage())
+                            .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { rollout: 0 }))
+                            .end(() => {
+                                nixt()
+                                    .stderr(Error.promoteUsage())
+                                    .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { rollout: -50 }))
+                                    .end(() => {
+                                        nixt()
+                                            .stderr(Error.promoteUsage())
+                                            .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { rollout: 150 }))
+                                            .end(done);
+                                    });
+                            });
+                    });
+            });
+        });
+        
+        describe("target binary version", () => {
+            var packageInfo: CodePush.PackageInfo;
+            
+            beforeEach((done: MochaDone) => {
+                packageInfo = { appVersion: binaryVersion1, label: "v1", rollout: rolloutFull };
+                
+                nixt()
+                    .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                    .run(Command.release(appName, release1, binaryVersion1))
+                    .end(done);
+            });
+            
+            it("succeeds", (done: MochaDone) => {
+                packageInfo.appVersion = "5.0.0";
+                
+                nixt()
+                    .stdout(Success.promote(appName, deploymentNameStaging, deploymentNameProduction))
+                    .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { targetBinaryVersion: packageInfo.appVersion }))
+                    .end(verifyDeploymentPackageMatches(done, deploymentNameProduction, packageInfo));
+            });
+            
+            it("fails on invalid semver", (done: MochaDone) => {
+                nixt()
+                    .stderr(Error.promoteUsage())
+                    .run(Command.promote(appName, deploymentNameStaging, deploymentNameProduction, { targetBinaryVersion: "not_valid_semver" }))
+                    .end(verifyDeploymentNoPackage(done, deploymentNameProduction));
+            });
+        });
+    });
+    
+    describe.only("rollback", () => {
+        
+        it("fails when deployment does not have a package", (done: MochaDone) => {
+            nixt()
+                .stderr(Error.rollbackNoReleases())
+                .run(Command.rollback(appName, deploymentNameStaging))
+                .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
+                .end(done);
+        });
+        
+        it("fails with only one package", (done: MochaDone) => {
+            nixt()
+                .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                .run(Command.release(appName, release1, binaryVersion1))
+                .end(() => {
+                    nixt()
+                        .stderr(Error.rollbackNoPriorReleases())
+                        .run(Command.rollback(appName, deploymentNameStaging))
+                        .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
+                        .end(done);
+                });
+        });
+        
+        it("fails when targeting last package", (done: MochaDone) => {
+            var latestRelease: string = "v1";
+            
+            nixt()
+                .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                .run(Command.release(appName, release1, binaryVersion1))
+                .end(() => {
+                    nixt()
+                        .stderr(Error.rollbackAlreadyLatest(latestRelease))
+                        .run(Command.rollback(appName, deploymentNameStaging, { targetRelease: latestRelease }))
+                        .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
+                        .end(done);
+                });
+        });
+        
+        it("fails when label not found", (done: MochaDone) => {
+            var fakeLabel: string = "v1000";
+            
+            nixt()
+                .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                .run(Command.release(appName, release1, binaryVersion1))
+                .end(() => {
+                    nixt()
+                        .stderr(Error.rollbackLabelNotFound(fakeLabel))
+                        .run(Command.rollback(appName, deploymentNameStaging, { targetRelease: fakeLabel }))
+                        .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
+                        .end(done);
+                });
+        });
+        
+        describe("defaults to the second latest package", () => {
+            
+            it("when there are only two packages", (done: MochaDone) => {
+                var markerDescription: string = "rollback_to_me!";
+                
+                nixt()
+                    .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                    .run(Command.release(appName, release1, binaryVersion1, { description: markerDescription }))
+                    .end(() => {
+                        nixt()
+                            .stdout(Success.releaseFile(release2, appName, deploymentNameStaging))
+                            .run(Command.release(appName, release2, binaryVersion1))
+                            .end(() => {
+                                nixt()
+                                    .stdout(Success.rollback(appName, deploymentNameStaging))
+                                    .run(Command.rollback(appName, deploymentNameStaging))
+                                    .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
+                                    .end(verifyDeploymentPackageMatches(done, deploymentNameStaging, { appVersion: binaryVersion1, label: "v3", description: markerDescription }, releaseMethodRollback));
+                            });
+                    });
+            });
+            
+            it("when there are at least 3 packages", (done: MochaDone) => {
+                var markerDescription: string = "rollback_to_me!";
+                
+                nixt()
+                    .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                    .run(Command.release(appName, release1, binaryVersion1))
+                    .end(() => {
+                        nixt()
+                            .stdout(Success.releaseFile(release2, appName, deploymentNameStaging))
+                            .run(Command.release(appName, release2, binaryVersion1, { description: markerDescription }))
+                            .end(() => {
+                                nixt()
+                                    .stdout(Success.releaseFile(release3, appName, deploymentNameStaging))
+                                    .run(Command.release(appName, release3, binaryVersion1))
+                                    .end(() => {
+                                        nixt()
+                                            .stdout(Success.rollback(appName, deploymentNameStaging))
+                                            .run(Command.rollback(appName, deploymentNameStaging))
+                                            .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
+                                            .end(verifyDeploymentPackageMatches(done, deploymentNameStaging, { appVersion: binaryVersion1, label: "v4", description: markerDescription }));
+                                    });
+                            });
+                    });
+            });
+        });
+            
+        it("carries over data from target release", (done: MochaDone) => {
+            var description: string = "rollback_to_me!";
+            var disabled: boolean = true;
+            var mandatory: boolean = true;
+            
+            nixt()
+                .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                .run(Command.release(appName, release1, binaryVersion1, { description: description, disabled: disabled, mandatory: mandatory }))
+                .end(() => {
+                    nixt()
+                        .stdout(Success.releaseFile(release2, appName, deploymentNameStaging))
+                        .run(Command.release(appName, release2, binaryVersion1))
+                        .end(() => {
+                            nixt()
+                                .stdout(Success.rollback(appName, deploymentNameStaging))
+                                .run(Command.rollback(appName, deploymentNameStaging))
+                                .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
+                                .end(verifyDeploymentPackageMatches(done, deploymentNameStaging, { appVersion: binaryVersion1, label: "v3", description: description, isDisabled: disabled, isMandatory: mandatory }, releaseMethodRollback));
+                        });
+                });
+        });
+        
+        describe("allows specifying a package", () => {
+            var newDescription: string = "another_description";
+            
+            var packageHistory: CodePush.PackageInfo[];
+            
+            beforeEach((done: MochaDone) => {
+                packageHistory = [
+                    { appVersion: binaryVersion3, label: "v1", rollout: rolloutFull },
+                    { appVersion: binaryVersion1, label: "v2", rollout: rolloutFull },
+                    { appVersion: binaryVersion2, label: "v3", rollout: rolloutFull }
+                ];
+                
+                nixt()
+                    .stdout(Success.releaseFile(release1, appName, deploymentNameStaging))
+                    .run(Command.release(appName, release1, binaryVersion3))
+                    .end(() => {
+                        nixt()
+                            .stdout(Success.releaseFile(release2, appName, deploymentNameStaging))
+                            .run(Command.release(appName, release2, binaryVersion1))
+                            .end(() => {
+                                nixt()
+                                    .stdout(Success.releaseFile(release3, appName, deploymentNameStaging))
+                                    .run(Command.release(appName, release3, binaryVersion2))
+                                    .end(done);
+                            });
+                    });
+            });
+            
+            it("that is first", (done: MochaDone) => {
+                packageHistory.push({ appVersion: binaryVersion3, label: "v4", rollout: rolloutFull });
+                
+                nixt()
+                    .stdout(Success.rollback(appName, deploymentNameStaging))
+                    .run(Command.rollback(appName, deploymentNameStaging, { targetRelease: "v1" }))
+                    .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
+                    .end(verifyPackageHistory(done, deploymentNameStaging, packageHistory));
+            });
+            
+            it("that is in the middle", (done: MochaDone) => {
+                packageHistory.push({ appVersion: binaryVersion1, label: "v4", rollout: rolloutFull });
+                
+                nixt()
+                    .stdout(Success.rollback(appName, deploymentNameStaging))
+                    .run(Command.rollback(appName, deploymentNameStaging, { targetRelease: "v2" }))
+                    .on(Command.PROMPT_ARE_YOU_SURE).respond(Command.RESPONSE_ACCEPT)
+                    .end(verifyPackageHistory(done, deploymentNameStaging, packageHistory));
+            });
         });
     });
 }

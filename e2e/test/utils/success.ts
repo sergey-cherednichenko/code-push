@@ -45,5 +45,17 @@ export module Success {
     export function patch(appName: string, deploymentName: string, label?: string): RegExp {
         return new RegExp("Successfully updated the " + (label ? label : "latest") + " release of " + appName + " app's " + deploymentName + " deployment.");
     }
+    
+    // Promote
+    
+    export function promote(appName: string, oldDeploymentName: string, newDeploymentName: string): RegExp {
+        return new RegExp("Successfully promoted the \"" + oldDeploymentName + "\" deployment of the \"" + appName + "\" app to the \"" + newDeploymentName + "\" deployment.");
+    }
+    
+    // Rollback
+    
+    export function rollback(appName: string, deploymentName: string): RegExp {
+        return new RegExp("Successfully performed a rollback on the \"" + deploymentName + "\" deployment of the \"" + appName + "\" app.");
+    }
 
 }
