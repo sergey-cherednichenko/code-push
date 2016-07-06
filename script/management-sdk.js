@@ -2,8 +2,6 @@ var os = require("os");
 var Q = require("q");
 var superagent = require("superagent");
 var Promise = Q.Promise;
-var superproxy = require("superagent-proxy");
-superproxy(superagent);
 var packageJson = require("../package.json");
 if (typeof window === "undefined") {
     fs = require("fs");
