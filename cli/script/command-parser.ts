@@ -383,7 +383,7 @@ var argv = yargs.usage(USAGE_PREFIX + " <command>")
         yargs.usage(USAGE_PREFIX + " release <appName> <updateContentsPath> <targetBinaryVersion> [options]")
             .demand(/*count*/ 3, /*max*/ 3)  // Require exactly three non-option arguments.
             .example("release MyApp app.js \"*\"", "Releases the \"app.js\" file to the \"MyApp\" app's \"Staging\" deployment, targeting any binary version using the \"*\" wildcard range syntax.")
-            .example("release MyApp ./platforms/ios/www 1.0.3 -d Production", "Releases the \"./platforms/ios/www\" folder and all its contents to the \"MyApp\" app's \"Production\" deployment, targeting only the 1.0.3 binary version")
+            .example("release MyApp ./platforms/ios/www 1.0.3 -d Production -k ~/.ssh/codepush_rsa", "Releases the \"./platforms/ios/www\" folder and all its contents to the \"MyApp\" app's \"Production\" deployment, targeting the 1.0.3 binary version and signed with the \"codepush_rsa\" private key")
             .example("release MyApp ./platforms/ios/www 1.0.3 -d Production -r 20", "Releases the \"./platforms/ios/www\" folder and all its contents to the \"MyApp\" app's \"Production\" deployment, targeting the 1.0.3 binary version and rolling out to about 20% of the users")
             .option("deploymentName", { alias: "d", default: "Staging", demand: false, description: "Deployment to release the update to", type: "string" })
             .option("description", { alias: "des", default: null, demand: false, description: "Description of the changes made to the app in this release", type: "string" })
@@ -399,7 +399,7 @@ var argv = yargs.usage(USAGE_PREFIX + " <command>")
         yargs.usage(USAGE_PREFIX + " release-cordova <appName> <platform> [options]")
             .demand(/*count*/ 2, /*max*/ 2)  // Require exactly two non-option arguments
             .example("release-cordova MyApp ios", "Releases the Cordova iOS project in the current working directory to the \"MyApp\" app's \"Staging\" deployment")
-            .example("release-cordova MyApp android -d Production", "Releases the Cordova Android project in the current working directory to the \"MyApp\" app's \"Production\" deployment")
+            .example("release-cordova MyApp android -d Production -k ~/.ssh/codepush_rsa", "Releases the Cordova Android project in the current working directory to the \"MyApp\" app's \"Production\" deployment, signed with the \"codepush_rsa\" private key")
             .option("build", { alias: "b", default: false, demand: false, description: "Invoke \"cordova build\" instead of \"cordova prepare\"", type: "boolean" })
             .option("isReleaseBuildType", { alias: "rb", default: false, demand: false, description: "If \"build\" option is true specifies whether perform a release build", type: "boolean" })
             .option("deploymentName", { alias: "d", default: "Staging", demand: false, description: "Deployment to release the update to", type: "string" })
@@ -417,7 +417,7 @@ var argv = yargs.usage(USAGE_PREFIX + " <command>")
         yargs.usage(USAGE_PREFIX + " release-react <appName> <platform> [options]")
             .demand(/*count*/ 2, /*max*/ 2)  // Require exactly two non-option arguments
             .example("release-react MyApp ios", "Releases the React Native iOS project in the current working directory to the \"MyApp\" app's \"Staging\" deployment")
-            .example("release-react MyApp android -d Production", "Releases the React Native Android project in the current working directory to the \"MyApp\" app's \"Production\" deployment")
+            .example("release-react MyApp android -d Production -k ~/.ssh/codepush_rsa", "Releases the React Native Android project in the current working directory to the \"MyApp\" app's \"Production\" deployment, signed with the \"codepush_rsa\" private key")
             .example("release-react MyApp windows --dev", "Releases the development bundle of the React Native Windows project in the current working directory to the \"MyApp\" app's \"Staging\" deployment")
             .option("bundleName", { alias: "b", default: null, demand: false, description: "Name of the generated JS bundle file. If unspecified, the standard bundle name will be used, depending on the specified platform: \"main.jsbundle\" (iOS), \"index.android.bundle\" (Android) or \"index.windows.bundle\" (Windows)", type: "string" })
             .option("deploymentName", { alias: "d", default: "Staging", demand: false, description: "Deployment to release the update to", type: "string" })
@@ -432,6 +432,7 @@ var argv = yargs.usage(USAGE_PREFIX + " <command>")
             .option("plistFilePrefix", { alias: "pre", default: null, demand: false, description: "Prefix to append to the file name when attempting to find your app's Info.plist file (iOS only)." })
             .option("rollout", { alias: "r", default: "100%", demand: false, description: "Percentage of users this release should be immediately available to", type: "string" })
             .option("sourcemapOutput", { alias: "s", default: null, demand: false, description: "Path to where the sourcemap for the resulting bundle should be written. If omitted, a sourcemap will not be generated.", type: "string" })
+            .option("signingKey", { alias: "k", default: false, demand: false, description: "Specifies the location of a RSA private key to sign the release with", type: "string" })
             .option("targetBinaryVersion", { alias: "t", default: null, demand: false, description: "Semver expression that specifies the binary app version(s) this release is targeting (e.g. 1.1.0, ~1.2.3). If omitted, the release will target the exact version specified in the \"Info.plist\" (iOS), \"build.gradle\" (Android) or \"Package.appxmanifest\" (Windows) files.", type: "string" })
             .option("outputDir", { alias: "o", default: null, demand: false, description: "Path to where the bundle and sourcemap should be written. If omitted, a bundle and sourcemap will not be written.", type: "string" })
             .check((argv: any, aliases: { [aliases: string]: string }): any => { return checkValidReleaseOptions(argv); });
@@ -787,6 +788,7 @@ function createCommand(): cli.ICommand {
                     releaseCommand.mandatory = argv["mandatory"];
                     releaseCommand.noDuplicateReleaseError = argv["noDuplicateReleaseError"];
                     releaseCommand.rollout = getRolloutValue(argv["rollout"]);
+                    releaseCommand.signingKeyPath = argv["signingKey"];
                 }
                 break;
 
@@ -808,6 +810,7 @@ function createCommand(): cli.ICommand {
                     releaseCordovaCommand.rollout = getRolloutValue(argv["rollout"]);
                     releaseCordovaCommand.appStoreVersion = argv["targetBinaryVersion"];
                     releaseCordovaCommand.isReleaseBuildType = argv["isReleaseBuildType"];
+                    releaseCordovaCommand.signingKeyPath = argv["signingKey"];
                 }
                 break;
 
@@ -835,6 +838,7 @@ function createCommand(): cli.ICommand {
                     releaseReactCommand.rollout = getRolloutValue(argv["rollout"]);
                     releaseReactCommand.sourcemapOutput = argv["sourcemapOutput"];
                     releaseReactCommand.outputDir = argv["outputDir"];
+                    releaseReactCommand.signingKeyPath = argv["signingKey"];
                 }
                 break;
 

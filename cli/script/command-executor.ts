@@ -1,6 +1,7 @@
 ﻿/// <reference path="../../definitions/generated/code-push.d.ts" />
 
 import AccountManager = require("code-push");
+var base64 = require("base-64");
 import * as chalk from "chalk";
 var childProcess = require("child_process");
 import debugCommand from "./commands/debug";
@@ -14,13 +15,17 @@ var plist = require("plist");
 var progress = require("progress");
 var prompt = require("prompt");
 import * as Q from "q";
+var recursiveFs = require("recursive-fs");
 var rimraf = require("rimraf");
 import * as semver from "semver";
 var simctl = require("simctl");
+var slash = require("slash");
 var Table = require("cli-table");
+import * as yazl from "yazl";
 var which = require("which");
 import wordwrap = require("wordwrap");
 import * as cli from "../definitions/cli";
+import * as signingReleaseHook from "./release-hooks/signing";
 import { AccessKey, Account, App, CodePushError, CollaboratorMap, CollaboratorProperties, Deployment, DeploymentMetrics, Headers, Package, PackageInfo, Session, UpdateMetrics } from "code-push/script/types";
 
 var configFilePath: string = path.join(process.env.LOCALAPPDATA || process.env.HOME, ".code-push.config");
@@ -62,6 +67,11 @@ export interface UpdateMetricsWithTotalActive extends UpdateMetrics {
 
 export interface PackageWithMetrics {
     metrics?: UpdateMetricsWithTotalActive;
+}
+
+interface ReleaseFile {
+    sourceLocation: string;     // The current location of the file on disk
+    targetLocation: string;     // The desired location of the file within the zip
 }
 
 export var log = (message: string | Chalk.ChalkChain): void => console.log(message);
@@ -549,6 +559,17 @@ function fileDoesNotExistOrIsDirectory(filePath: string): boolean {
     } catch (error) {
         return true;
     }
+}
+
+function generateRandomFilename(length: number): string {
+    var filename: string = "";
+    var validChar: string = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+    for (var i = 0; i < length; i++) {
+        filename += validChar.charAt(Math.floor(Math.random() * validChar.length));
+    }
+
+    return filename;
 }
 
 function getTotalActiveFromDeploymentMetrics(metrics: DeploymentMetrics): number {
@@ -1111,109 +1132,189 @@ function patch(command: cli.IPatchCommand): Promise<void> {
 }
 
 export var release = (command: cli.IReleaseCommand): Promise<void> => {
-
     if (isBinaryOrZip(command.package)) {
         throw new Error("It is unnecessary to package releases in a .zip or binary file. Please specify the direct path to the update content's directory (e.g. /platforms/ios/www) or file (e.g. main.jsbundle).");
     }
 
     throwForInvalidSemverRange(command.appStoreVersion);
-    var filePath: string = command.package;
-    var isSingleFilePackage: boolean = true;
 
-    if (fs.lstatSync(filePath).isDirectory()) {
-        isSingleFilePackage = false;
-    }
-
-    var lastTotalProgress = 0;
-    var progressBar = new progress("Upload progress:[:bar] :percent :etas", {
-        complete: "=",
-        incomplete: " ",
-        width: 50,
-        total: 100
-    });
-
-    var uploadProgress = (currentProgress: number): void => {
-        progressBar.tick(currentProgress - lastTotalProgress);
-        lastTotalProgress = currentProgress;
-    };
-
-    var updateMetadata: PackageInfo = {
+    // Copy the command so that the original is not modified
+    var currentCommand: cli.IReleaseCommand = {
+        appName: command.appName,
+        appStoreVersion: command.appStoreVersion,
+        deploymentName: command.deploymentName,
         description: command.description,
-        isDisabled: command.disabled,
-        isMandatory: command.mandatory,
-        rollout: command.rollout
+        disabled: command.disabled,
+        mandatory: command.mandatory,
+        package: command.package,
+        rollout: command.rollout,
+        signingKeyPath: command.signingKeyPath,
+        type: command.type
     };
 
-    return sdk.isAuthenticated(true)
-        .then((isAuth: boolean): Promise<void> => {
-            return sdk.release(command.appName, command.deploymentName, filePath, command.appStoreVersion, updateMetadata, uploadProgress);
+    var hooks: cli.ReleaseHook[] = [ signingReleaseHook.default, coreReleaseHook ];
+
+    var releaseHooksPromise = hooks.reduce((accumulatedPromise: Q.Promise<cli.IReleaseCommand>, hook: cli.ReleaseHook) => {
+        return accumulatedPromise
+            .then((modifiedCommand: cli.IReleaseCommand) => {
+                currentCommand = modifiedCommand || currentCommand;
+                return hook(currentCommand, command);
+            });
+    }, Q(currentCommand));
+
+    return releaseHooksPromise
+        .then(() => {});
+}
+
+var coreReleaseHook: cli.ReleaseHook = (currentCommand: cli.IReleaseCommand, originalCommand: cli.IReleaseCommand): Promise<cli.IReleaseCommand> => {
+    return Q(<void>null)
+        .then(() => {
+            var releaseFiles: ReleaseFile[] = [];
+
+            if (!fs.lstatSync(currentCommand.package).isDirectory()) {
+                releaseFiles.push({
+                    sourceLocation: currentCommand.package,
+                    targetLocation: path.basename(currentCommand.package)  // Put the file in the root
+                });
+                return Q(releaseFiles);
+            }
+
+            var deferred = Q.defer<ReleaseFile[]>();
+            var directoryPath: string = currentCommand.package;
+            var baseDirectoryPath = path.join(directoryPath, "..");     // For legacy reasons, put the root directory in the zip
+
+            recursiveFs.readdirr(currentCommand.package, (error?: any, directories?: string[], files?: string[]): void => {
+                if (error) {
+                    deferred.reject(error);
+                    return;
+                }
+
+                files.forEach((filePath: string) => {
+                    var relativePath: string = path.relative(baseDirectoryPath, filePath);
+                    // yazl does not like backslash (\) in the metadata path.
+                    relativePath = slash(relativePath);
+                    releaseFiles.push({
+                        sourceLocation: filePath,
+                        targetLocation: relativePath
+                    });
+                });
+
+                deferred.resolve(releaseFiles);
+            });
+
+            return deferred.promise;
         })
-        .then((): void => {
-            log("Successfully released an update containing the \"" + command.package + "\" " + (isSingleFilePackage ? "file" : "directory") + " to the \"" + command.deploymentName + "\" deployment of the \"" + command.appName + "\" app.");
+        .then((releaseFiles: ReleaseFile[]) => {
+            return Promise<string>((resolve: (file: string) => void, reject: (reason: Error) => void): void => {
+
+                var packagePath: string = path.join(process.cwd(), generateRandomFilename(15) + ".zip");
+                var zipFile = new yazl.ZipFile();
+                var writeStream: fs.WriteStream = fs.createWriteStream(packagePath);
+
+                zipFile.outputStream.pipe(writeStream)
+                    .on("error", (error: Error): void => {
+                        reject(error);
+                    })
+                    .on("close", (): void => {
+
+                        resolve(packagePath);
+                    });
+
+                releaseFiles.forEach((releaseFile: ReleaseFile) => {
+                    zipFile.addFile(releaseFile.sourceLocation, releaseFile.targetLocation);
+                });
+
+                zipFile.end();
+            });
+
         })
-        .catch((err: CodePushError) => releaseErrorHandler(err, command));
+        .then((packagePath: string): Promise<cli.IReleaseCommand> => {
+            var lastTotalProgress = 0;
+            var progressBar = new progress("Upload progress:[:bar] :percent :etas", {
+                complete: "=",
+                incomplete: " ",
+                width: 50,
+                total: 100
+            });
+
+            var uploadProgress = (currentProgress: number): void => {
+                progressBar.tick(currentProgress - lastTotalProgress);
+                lastTotalProgress = currentProgress;
+            };
+
+            var updateMetadata: PackageInfo = {
+                description: currentCommand.description,
+                isDisabled: currentCommand.disabled,
+                isMandatory: currentCommand.mandatory,
+                rollout: currentCommand.rollout
+            };
+
+            return sdk.release(currentCommand.appName, currentCommand.deploymentName, packagePath, currentCommand.appStoreVersion, updateMetadata, uploadProgress)
+                .then((): void => {
+                    log(`Successfully released an update containing the "${originalCommand.package}" `
+                        + `${fs.lstatSync(originalCommand.package).isDirectory()  ? "directory" : "file"}`
+                        + ` to the "${currentCommand.deploymentName}" deployment of the "${currentCommand.appName}" app.`);
+                })
+                .then(() => currentCommand)
+                .finally(() => {
+                    fs.unlinkSync(packagePath);
+                });
+        });
 }
 
 export var releaseCordova = (command: cli.IReleaseCordovaCommand): Promise<void> => {
+    var platform: string = command.platform.toLowerCase();
+    var projectRoot: string = process.cwd();
+    var platformFolder: string = path.join(projectRoot, "platforms", platform);
+    var platformCordova: string = path.join(platformFolder, "cordova");
+    var outputFolder: string;
+
+    if (platform === "ios") {
+        outputFolder = path.join(platformFolder, "www");
+    } else if (platform === "android") {
+        outputFolder = path.join(platformFolder, "assets", "www");
+    } else {
+        throw new Error("Platform must be either \"ios\" or \"android\".");
+    }
+
+    var cordovaCommand: string = command.build ? "build" : "prepare";
+    var cordovaCLI: string = "cordova";
+
+    // Check whether the Cordova or PhoneGap CLIs are
+    // installed, and if not, fail early
+    try {
+        which.sync(cordovaCLI);
+    } catch (e) {
+        try {
+            cordovaCLI = "phonegap";
+            which.sync(cordovaCLI);
+        } catch (e) {
+            throw new Error(`Unable to ${cordovaCommand} project. Please ensure that either the Cordova or PhoneGap CLI is installed.`);
+        }
+    }
+
+    log(chalk.cyan(`Running "${cordovaCLI} ${cordovaCommand}" command:\n`));
+    try {
+        execSync([cordovaCLI, cordovaCommand, platform, "--verbose"].join(" "), { stdio: "inherit" });
+    } catch (error) {
+        throw new Error(`Unable to ${cordovaCommand} project. Please ensure that the CWD represents a Cordova project and that the "${platform}" platform was added by running "${cordovaCLI} platform add ${platform}".`);
+    }
+
+    try {
+        var configString: string = fs.readFileSync(path.join(projectRoot, "config.xml"), { encoding: "utf8" });
+    } catch (error) {
+        throw new Error(`Unable to find or read "config.xml" in the CWD. The "release-cordova" command must be executed in a Cordova project folder.`);
+    }
+
+    var configPromise: Promise<any> = parseXml(configString);
     var releaseCommand: cli.IReleaseCommand = <any>command;
-    // Check for app and deployment exist before releasing an update.
-    // This validation helps to save about 1 minute or more in case user has typed wrong app or deployment name.
-    return sdk.getDeployment(command.appName, command.deploymentName)
-        .then((): any => {
-            var platform: string = command.platform.toLowerCase();
-            var projectRoot: string = process.cwd();
-            var platformFolder: string = path.join(projectRoot, "platforms", platform);
-            var platformCordova: string = path.join(platformFolder, "cordova");
-            var outputFolder: string;
 
-            if (platform === "ios") {
-                outputFolder = path.join(platformFolder, "www");
-            } else if (platform === "android") {
-                outputFolder = path.join(platformFolder, "assets", "www");
-            } else {
-                throw new Error("Platform must be either \"ios\" or \"android\".");
-            }
+    releaseCommand.package = outputFolder;
+    releaseCommand.type = cli.CommandType.release;
 
-            var cordovaCommand: string = command.build ?
-                (command.isReleaseBuildType ? "build --release" : "build") :
-                "prepare";
-            var cordovaCLI: string = "cordova";
-
-            // Check whether the Cordova or PhoneGap CLIs are
-            // installed, and if not, fail early
-            try {
-                which.sync(cordovaCLI);
-            } catch (e) {
-                try {
-                    cordovaCLI = "phonegap";
-                    which.sync(cordovaCLI);
-                } catch (e) {
-                    throw new Error(`Unable to ${cordovaCommand} project. Please ensure that either the Cordova or PhoneGap CLI is installed.`);
-                }
-            }
-
-            log(chalk.cyan(`Running "${cordovaCLI} ${cordovaCommand}" command:\n`));
-            try {
-                execSync([cordovaCLI, cordovaCommand, platform, "--verbose"].join(" "), { stdio: "inherit" });
-            } catch (error) {
-                throw new Error(`Unable to ${cordovaCommand} project. Please ensure that the CWD represents a Cordova project and that the "${platform}" platform was added by running "${cordovaCLI} platform add ${platform}".`);
-            }
-
-            try {
-                var configString: string = fs.readFileSync(path.join(projectRoot, "config.xml"), { encoding: "utf8" });
-            } catch (error) {
-                throw new Error(`Unable to find or read "config.xml" in the CWD. The "release-cordova" command must be executed in a Cordova project folder.`);
-            }
-
-            var configPromise: Promise<any> = parseXml(configString);
-
-            releaseCommand.package = outputFolder;
-            releaseCommand.type = cli.CommandType.release;
-
-            return configPromise
-                .catch((err: any) => {
-                    throw new Error(`Unable to parse "config.xml" in the CWD. Ensure that the contents of "config.xml" is valid XML.`);
-                });
+    return configPromise
+        .catch((err: any) => {
+            throw new Error(`Unable to parse "config.xml" in the CWD. Ensure that the contents of "config.xml" is valid XML.`);
         })
         .then((parsedConfig: any) => {
             var config: any = parsedConfig.widget;

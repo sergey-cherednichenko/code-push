@@ -178,6 +178,7 @@ export interface IReleaseBaseCommand extends ICommand, IPackageInfo {
     appStoreVersion: string;
     deploymentName: string;
     noDuplicateReleaseError?: boolean;
+    signingKeyPath?: string;
 }
 
 export interface IReleaseCommand extends IReleaseBaseCommand {
@@ -215,3 +216,5 @@ export interface ISessionListCommand extends ICommand {
 export interface ISessionRemoveCommand extends ICommand {
     machineName: string;
 }
+
+export type ReleaseHook = (currentCommand: IReleaseCommand, originalCommand: IReleaseCommand) => Q.Promise<IReleaseCommand|void>;
