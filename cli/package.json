@@ -3,6 +3,7 @@
   "version": "2.0.0-beta",
   "description": "Management CLI for the CodePush service",
   "main": "script/cli.js",
+  "typings": "script/cli.d.ts",
   "scripts": {
     "test": "gulp test"
   },

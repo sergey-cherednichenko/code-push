@@ -57,6 +57,7 @@ function scriptTask(cwd, jsx) {
 
     return merge([
             tsResult.js.pipe(gulp.dest("bin", options)),
+            tsResult.dts.pipe(gulp.dest("bin", options)),
             tsResult.dts.pipe(gulp.dest("bin/definitions", options))
         ])
         .pipe(errorCatch);

@@ -3,6 +3,7 @@
   "version": "2.0.0-beta",
   "description": "Management SDK for the CodePush service",
   "main": "script/index.js",
+  "typings": "script/index.d.ts",
   "scripts": {
     "test": "gulp"
   },

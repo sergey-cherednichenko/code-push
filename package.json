@@ -20,6 +20,7 @@
     "mkdirp": "^0.5.1",
     "node-libs-browser": "^0.5.2",
     "node-rsa": "^0.2.24",
+    "replacestream": "^4.0.2",
     "require-all": "^1.1.0",
     "run-sequence": "^1.1.2",
     "sinon": "1.16.0",
